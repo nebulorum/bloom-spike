@@ -1,13 +1,21 @@
 package org.bloomlang.bloom.compiler.analyzer
 
 import org.bloomlang.bloom.compiler.ast._
-import org.scalatest.FunSuite
+import org.scalatest._
+import Matchers._
 
 class AnalyserTest extends FunSuite {
 
-  val module1 = Module("SomeModule")
-  val module2 = Module("OtherModule")
   val package1 = Package("system.bloom")
+
+  val table1 = Table(IdnDef("table1"))
+  val table2 = Table(IdnDef("table2"))
+  val rule1 = Rule("table1")
+  val module1 = Module(IdnDef("SomeModule"), Seq(
+    ImportModule("OtherModule"),
+    table1,
+    rule1))
+  val module2 = Module(IdnDef("OtherModule"), Seq(table2))
 
   val userModules = ModuleContainer(Seq(
     ImportPackage("system.bloom"),
@@ -16,11 +24,19 @@ class AnalyserTest extends FunSuite {
   ))
 
   val program = Program(Seq(package1), Seq(userModules))
+  val analyzer = new Analyzer(ProgramTree(program))
 
   test("can locate modules in a program") {
-    val analyzer = new Analyzer(ProgramTree(program))
-    assert(analyzer.moduleDef("SomeModule") == Some(module1))
-    assert(analyzer.moduleDef("OtherModule") == Some(module2))
-    assert(analyzer.moduleDef("NotThereModule") == None)
+    analyzer.moduleDef("SomeModule") shouldBe Some(module1)
+    analyzer.moduleDef("OtherModule") shouldBe Some(module2)
+    analyzer.moduleDef("NotThereModule") shouldBe None
   }
+
+  test("can find table on another module without alias") {
+    definedSymbols(analyzer, rule1) shouldBe Set("SomeModule", "table1")
+    definedSymbols(analyzer, table2) shouldBe Set("OtherModule", "table2")
+  }
+
+  private def definedSymbols(analyzer: Analyzer, node: Node) = analyzer.env(node).head.keySet
+
 }

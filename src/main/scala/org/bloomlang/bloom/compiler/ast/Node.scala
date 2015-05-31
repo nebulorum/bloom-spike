@@ -12,18 +12,20 @@ object ProgramTree {
 
 case class Program(packages:Seq[Package], containers: Seq[ModuleContainer]) extends Node
 
-case class ModuleContainer(statements: Seq[Node])
+case class ModuleContainer(statements: Seq[Node]) extends Node
 
-case class Module(name:String) extends Node
+case class Module(name: IdnDef, statements: Seq[Node]) extends Node
 
-case class Package(name:String) extends Node
+case class Package(name: String) extends Node
 
 trait Collection extends Node
 
-case class Table(name: String) extends Collection
+case class Table(name: IdnDef) extends Collection
 
-case class Rule(lhs: Collection) extends Node
+case class Rule(lhs: String) extends Node
 
 case class ImportPackage(importedPackage: String) extends Node
 
 case class ImportModule(importedModule: String) extends Node
+
+case class IdnDef(name: String) extends Node
