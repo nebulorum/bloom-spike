@@ -35,8 +35,10 @@ class AnalyserTest extends FunSuite {
   test("can find table on another module without alias") {
     definedSymbols(analyzer, rule1) shouldBe Set("SomeModule", "table1")
     definedSymbols(analyzer, table2) shouldBe Set("OtherModule", "table2")
+    definedSymbols2(analyzer, rule1) shouldBe Set("OtherModule", "SomeModule", "table1", "table2")
   }
 
-  private def definedSymbols(analyzer: Analyzer, node: Node) = analyzer.env(node).head.keySet
+  private def definedSymbols(analyzer: Analyzer, node: Node) = analyzer.defEnv(node).head.keySet
+  private def definedSymbols2(analyzer: Analyzer, node: Node) = analyzer.defModuleEnv(node).head.keySet
 
 }

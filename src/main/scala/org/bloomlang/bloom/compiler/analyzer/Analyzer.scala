@@ -4,11 +4,10 @@ import org.bloomlang.bloom.compiler.ast.ProgramTree.ProgramTree
 import org.bloomlang.bloom.compiler.ast._
 import org.kiama.==>
 import org.kiama.attribution.{Decorators, Attribution}
-import org.kiama.util.{MultipleEntity, UnknownEntity, Entity, Environments}
-
+import org.kiama.util.{Entity, Environments}
 
 object SymbolTable extends Environments {
-
+  case class MyEntity(definedAt: Node) extends Entity
 }
 
 class Analyzer(tree: ProgramTree) extends Attribution {
@@ -33,7 +32,8 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     }
   }
 
-  lazy val env: Chain[Environment] = chain(defEnvIn, defEnvOut)
+  lazy val defEnv: Chain[Environment] = chain(defEnvIn, defEnvOut)
+  lazy val defModuleEnv: Chain[Environment] = chain(defModuleEnvIn, defModuleEnvOut)
 
   private def defEnvIn(in: Node => Environment): Node ==> Environment = {
     case _:Program =>
@@ -51,7 +51,28 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       defineIfNew(out(n),i,defEntity(i))
   }
 
-  def defEntity(s:String):Entity = MultipleEntity()
+  private def defModuleEnvIn(in: Node => Environment): Node ==> Environment = {
+    case _:Program =>
+      rootenv()
+
+    case node: Module =>
+      enter(in(node))
+  }
+
+  private def defModuleEnvOut(out: Node => Environment): Node ==> Environment = {
+    case node:Module =>
+      leave(out(node))
+
+    case i@ImportModule(module) if moduleDef(module).isDefined =>
+      val m = moduleDef(module).get
+      val mEnv = defEnv(tree.lastChild(m).head)
+      mEnv.head.foldLeft(out(i))((e,sd) => defineIfNew(e, sd._1, sd._2))
+      
+    case n@IdnDef(i) =>
+      defineIfNew(out(n),i,defEntity(i))
+  }
+
+  def defEntity(s:String):Entity = MyEntity(null)
 
   lazy val definedModules: Program => Seq[Module] = {
     attr {
