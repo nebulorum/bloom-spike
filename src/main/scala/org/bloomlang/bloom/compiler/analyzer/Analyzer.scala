@@ -25,17 +25,23 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     collectmessages(tree) {
       case im@ImportModule(module) if moduleDefinition(module).isEmpty =>
         message(im, s"Module '$module' not defined.")
+      case ip@ImportPackage(pkg) if packageDefinition(pkg).isEmpty =>
+        message(ip, s"Package '$pkg' not found.")
     }
 
   def moduleDefinition(name: String): Option[Module] = {
     definedModules.find(m => m.name.name == name)
   }
 
+  private def packageDefinition(name: String): Option[Package] = definedPackages.find(p => p.name == name)
+
   private lazy val definedModules: Seq[Module] =
     for {
       c <- tree.root.containers
       m <- c.statements.collect { case m: Module => m }
     } yield m
+
+  private lazy val definedPackages: Seq[Package] = tree.root.packages
 
   lazy val defEnv: Chain[Environment] = chain(defEnvIn, defEnvOut)
   lazy val defModuleEnv: Chain[Environment] = chain(defModuleEnvIn, defModuleEnvOut)

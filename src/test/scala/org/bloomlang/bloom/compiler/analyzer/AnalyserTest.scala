@@ -18,8 +18,10 @@ class AnalyserTest extends FunSuite {
     rule1))
   val module2 = Module(IdnDef("OtherModule"), Seq(table2))
 
+  val importSystemBloom = ImportPackage("system.bloom")
+
   val userModules = ModuleContainer(Seq(
-    ImportPackage("system.bloom"),
+    importSystemBloom,
     module1,
     module2
   ))
@@ -40,17 +42,29 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing module on import") {
-    val program = Program(Seq(), Seq(ModuleContainer(Seq(module1))))
-    val analyzer = new Analyzer(ProgramTree(program))
-    analyzer.errors.map(_.label) shouldBe Seq("Module 'OtherModule' not defined.")
+    val test  = makeTestProgram()(module1)
+    test.errorLabels shouldBe Seq("Module 'OtherModule' not defined.")
+  }
+  
+  test("report missing package import") {
+    val test = makeTestProgram()(importSystemBloom, module2)
+    test.errorLabels shouldBe Seq("Package 'system.bloom' not found.")
   }
 
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
   }
 
+  private def makeTestProgram(pkgs: Package*)(stmts: Node*) =
+    new TestAnalyzer(Program(pkgs, Seq(ModuleContainer(stmts))))
+
   private def definedSymbols(analyzer: Analyzer, node: Node) = analyzer.defEnv(node).head.keySet
 
   private def definedSymbols2(analyzer: Analyzer, node: Node) = analyzer.defModuleEnv(node).head.keySet
+
+  class TestAnalyzer(val program: Program) {
+    val analyzer = new Analyzer(ProgramTree(program))
+    def errorLabels = analyzer.errors.map(_.label)
+  }
 
 }
