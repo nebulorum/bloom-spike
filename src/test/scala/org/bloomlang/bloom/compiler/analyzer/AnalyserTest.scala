@@ -7,13 +7,16 @@ import org.kiama.util.Messaging._
 
 class AnalyserTest extends FunSuite {
 
-  val package1 = Package("system.bloom")
+  val package1 = makePackage("system.bloom",
+    makeType("Int")
+  )
 
   val table1 = makeTable("table1")
   val table2 = makeTable("table2")
 
-  val rule1 = Rule(IdnUse("table1"))
-  val module1 = makeModule("SomeModule", 
+  val rule1 = makeRule("table1")
+
+  val module1 = makeModule("SomeModule",
     ImportModule("OtherModule"),
     table1,
     rule1)
@@ -43,53 +46,74 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing module on import") {
-    val test  = makeTestProgram()(module1)
-    test.errorLabels shouldBe Seq("Module 'OtherModule' not defined.")
+    analyzeProgram()(module1).
+      errorLabels shouldBe Seq("Module 'OtherModule' not defined.")
   }
-  
+
   test("report missing package import") {
-    val test = makeTestProgram()(importSystemBloom, otherModule)
-    test.errorLabels shouldBe Seq("Package 'system.bloom' not found.")
+    analyzeProgram()(importSystemBloom, otherModule).
+      errorLabels shouldBe Seq("Package 'system.bloom' not found.")
   }
 
   test("report missing table definition") {
-    val test = makeTestProgram()(makeModule("a", rule1))
-    test.errorLabels shouldBe Seq("Unknown collection 'table1'.")
+    analyzeProgram()(makeModule("a", rule1)).
+      errorLabels shouldBe Seq("Symbol 'table1' not defined.")
   }
 
   test("report double definition of a symbol") {
-    val test = makeTestProgram()(makeModule("a", table1, makeTable("table1")))
-    test.errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
+    analyzeProgram()(makeModule("a", table1, makeTable("table1"))).
+      errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
+  }
+
+  test("report double definition of a type") {
+    analyzeProgram(makePackage("sys", makeType("Int"), makeType("Int")))().
+      errorLabels shouldBe Seq("Symbol 'Int' was defined multiple times.")
+  }
+
+  test("report missing type definition if package not imported") {
+    analyzeProgram(package1)(makeModule("A", makeRule("Int"))).
+      errorLabels shouldBe Seq("Symbol 'Int' not defined.")
+  }
+
+  test("report using type in place of collection") {
+    analyzeProgram(package1)(importSystemBloom, makeModule("A", makeRule("Int"))).
+      errorLabels shouldBe Seq("Expected collection declaration, found type 'Int'.")
   }
 
   test("report double definition of a symbol in module import and local") {
-    val test = makeTestProgram()(
+    analyzeProgram()(
       otherModule,
-      makeModule("a", ImportModule("OtherModule"), makeTable("table2")))
-    test.errorLabels shouldBe Seq("Symbol 'table2' was defined multiple times.")
+      makeModule("a", ImportModule("OtherModule"), makeTable("table2"))).
+      errorLabels shouldBe Seq("Symbol 'table2' was defined multiple times.")
   }
 
   test("report double definition of a symbol in module two different modules") {
-    val test = makeTestProgram()(
+    analyzeProgram()(
       makeModule("A", makeTable("table1")),
       makeModule("B", makeTable("table1")),
-      makeModule("C", ImportModule("A"), ImportModule("B"), rule1))
-    test.errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
+      makeModule("C", ImportModule("A"), ImportModule("B"), rule1)).
+      errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
   }
 
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
   }
 
-  private def makeTestProgram(pkgs: Package*)(stmts: Node*) =
+  private def analyzeProgram(pkgs: Package*)(stmts: Node*) =
     new TestAnalyzer(Program(pkgs, Seq(ModuleContainer(stmts))))
 
-  private def makeModule(moduleName:String, stmts: Node*) =
+  private def makeModule(moduleName: String, stmts: Node*) =
     Module(moduleName, stmts)
 
   private def makeTable(tableName: String): Table = {
     Table(IdnDef(tableName))
   }
+
+  private def makeRule(lhs: String) = Rule(CollectionRef(IdnUse(lhs)))
+
+  private def makeType(name: String) = TypeDeclaration(IdnDef(name))
+
+  private def makePackage(packageName: String, declarations: PackageDeclaration*) = Package(packageName, declarations)
 
   private def definedSymbols(analyzer: Analyzer, node: Node) = analyzer.defEnv(node).head.keySet
 

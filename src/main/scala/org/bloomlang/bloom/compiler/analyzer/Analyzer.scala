@@ -9,7 +9,9 @@ import org.kiama.util._
 
 object SymbolTable extends Environments {
 
-  case class MyEntity(definedAt: Node) extends Entity
+  case class CollectionEntity(definedAt: Collection) extends Entity
+
+  case class TypeEntity(definedAt: TypeDeclaration) extends Entity
 
 }
 
@@ -30,13 +32,26 @@ class Analyzer(tree: ProgramTree) extends Attribution {
         message(ip, s"Package '$pkg' not found.")
 
       case iu@IdnUse(idn) if !isDefinedInEnv(defModuleEnv(iu), idn) =>
-        message(iu, s"Unknown collection '$idn'.")
+        message(iu, s"Symbol '$idn' not defined.")
 
       case iu@IdnUse(idn) if hasMultipleDefinition(iu, idn) =>
         message(iu, s"Symbol '$idn' was defined multiple times.")
 
       case id@IdnDef(idn) if hasMultipleDefinition(id, idn) =>
         message(id, s"Symbol '$idn' was defined multiple times.")
+
+      case CollectionRef(id@IdnUse(idn)) =>
+        checkuse(lookup(defModuleEnv(id), idn, UnknownEntity())) {
+          case CollectionEntity(_) => noMessages
+          case other => message(idn, s"Expected collection declaration, found ${describeEntity(other)}.")
+        }
+    }
+
+  private def describeEntity(entity: Entity): String =
+    entity match {
+      case CollectionEntity(Table(IdnDef(name))) => s"table '$name'"
+      case entity: TypeEntity => entity.definedAt.describe
+      case rest => rest.toString
     }
 
   private def hasMultipleDefinition(node: Node, identifier: String) =
@@ -63,28 +78,28 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     case _: Program =>
       rootenv()
 
-    case node: Module =>
+    case node@(_: Module | _: Package) =>
       enter(in(node))
   }
 
   private def defEnvOut(out: Node => Environment): Node ==> Environment = {
-    case node: Module =>
+    case node@(_: Module | _: Package) =>
       leave(out(node))
 
-    case n@IdnDef(i) =>
-      defineIfNew(out(n), i, defEntity(i))
+    case node@IdnDef(i) =>
+      defineIfNew(out(node), i, defEntity(node))
   }
 
   private def defModuleEnvIn(in: Node => Environment): Node ==> Environment = {
     case _: Program =>
       rootenv()
 
-    case node: Module =>
+    case node@(_: Module | _: Package) =>
       enter(in(node))
   }
 
   private def defModuleEnvOut(out: Node => Environment): Node ==> Environment = {
-    case node: Module =>
+    case node@(_: Module | _: Package) =>
       leave(out(node))
 
     case i@ImportModule(module) if moduleDefinition(module).isDefined =>
@@ -92,10 +107,22 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       val mEnv = defEnv(tree.lastChild(m).head)
       mEnv.head.foldLeft(out(i))((e, sd) => defineIfNew(e, sd._1, sd._2))
 
-    case n@IdnDef(i) =>
-      defineIfNew(out(n), i, defEntity(i))
+    case i@ImportPackage(name) if packageDefinition(name).isDefined =>
+      val m = packageDefinition(name).get
+      val mEnv = defEnv(tree.lastChild(m).head)
+      mEnv.head.foldLeft(out(i))((e, sd) => defineIfNew(e, sd._1, sd._2))
+
+    case node@IdnDef(i) =>
+      defineIfNew(out(node), i, defEntity(node))
   }
 
-  def defEntity(s: String): Entity = MyEntity(null)
+  lazy val defEntity: IdnDef => Entity =
+    attr {
+      case tree.parent(p) =>
+        p match {
+          case decl: TypeDeclaration => TypeEntity(decl)
+          case decl: Table => CollectionEntity(decl)
+        }
+    }
 
 }

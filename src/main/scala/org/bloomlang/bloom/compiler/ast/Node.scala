@@ -16,13 +16,23 @@ case class ModuleContainer(statements: Seq[Node]) extends Node
 
 case class Module(name: String, statements: Seq[Node]) extends Node
 
-case class Package(name: String) extends Node
+case class Package(name: String, declarations: Seq[PackageDeclaration]) extends Node
+
+trait PackageDeclaration extends Node {
+  def describe:String
+}
+
+case class TypeDeclaration(typeName: IdnDef) extends PackageDeclaration {
+  def describe = s"type '${typeName.name}'"
+}
 
 trait Collection extends Node
 
 case class Table(name: IdnDef) extends Collection
 
-case class Rule(lhs: IdnUse) extends Node
+case class CollectionRef(idn: IdnUse) extends Node
+
+case class Rule(lhs: CollectionRef) extends Node
 
 case class ImportPackage(importedPackage: String) extends Node
 
