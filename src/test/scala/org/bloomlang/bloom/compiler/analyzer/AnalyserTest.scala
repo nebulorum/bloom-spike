@@ -3,6 +3,7 @@ package org.bloomlang.bloom.compiler.analyzer
 import org.bloomlang.bloom.compiler.ast._
 import org.scalatest._
 import Matchers._
+import org.kiama.util.Messaging._
 
 class AnalyserTest extends FunSuite {
 
@@ -27,9 +28,9 @@ class AnalyserTest extends FunSuite {
   val analyzer = new Analyzer(ProgramTree(program))
 
   test("can locate modules in a program") {
-    analyzer.moduleDef("SomeModule") shouldBe Some(module1)
-    analyzer.moduleDef("OtherModule") shouldBe Some(module2)
-    analyzer.moduleDef("NotThereModule") shouldBe None
+    analyzer.moduleDefinition("SomeModule") shouldBe Some(module1)
+    analyzer.moduleDefinition("OtherModule") shouldBe Some(module2)
+    analyzer.moduleDefinition("NotThereModule") shouldBe None
   }
 
   test("can find table on another module without alias") {
@@ -38,7 +39,18 @@ class AnalyserTest extends FunSuite {
     definedSymbols2(analyzer, rule1) shouldBe Set("OtherModule", "SomeModule", "table1", "table2")
   }
 
+  test("report missing module on import") {
+    val program = Program(Seq(), Seq(ModuleContainer(Seq(module1))))
+    val analyzer = new Analyzer(ProgramTree(program))
+    analyzer.errors.map(_.label) shouldBe Seq("Module 'OtherModule' not defined.")
+  }
+
+  test("good program should have no messages") {
+    analyzer.errors shouldBe noMessages
+  }
+
   private def definedSymbols(analyzer: Analyzer, node: Node) = analyzer.defEnv(node).head.keySet
+
   private def definedSymbols2(analyzer: Analyzer, node: Node) = analyzer.defModuleEnv(node).head.keySet
 
 }
