@@ -22,10 +22,12 @@ trait Collection extends Node
 
 case class Table(name: IdnDef) extends Collection
 
-case class Rule(lhs: String) extends Node
+case class Rule(lhs: IdnUse) extends Node
 
 case class ImportPackage(importedPackage: String) extends Node
 
 case class ImportModule(importedModule: String) extends Node
 
 case class IdnDef(name: String) extends Node
+
+case class IdnUse(name: String) extends Node

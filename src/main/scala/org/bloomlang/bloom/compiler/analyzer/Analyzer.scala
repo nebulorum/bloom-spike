@@ -5,7 +5,7 @@ import org.bloomlang.bloom.compiler.ast._
 import org.kiama.==>
 import org.kiama.attribution.{Decorators, Attribution}
 import org.kiama.util.Messaging._
-import org.kiama.util.{Entity, Environments}
+import org.kiama.util.{MultipleEntity, UnknownEntity, Entity, Environments}
 
 object SymbolTable extends Environments {
 
@@ -27,6 +27,10 @@ class Analyzer(tree: ProgramTree) extends Attribution {
         message(im, s"Module '$module' not defined.")
       case ip@ImportPackage(pkg) if packageDefinition(pkg).isEmpty =>
         message(ip, s"Package '$pkg' not found.")
+      case iu@IdnUse(idn) if !isDefinedInEnv(defModuleEnv(iu), idn) =>
+        message(iu, s"Unknown collection '$idn'.")
+      case id@IdnDef(idn) if lookup(defModuleEnv(id), idn, UnknownEntity()) == MultipleEntity() =>
+        message(id, s"Symbol '$idn' was defined multiple times.")
     }
 
   def moduleDefinition(name: String): Option[Module] = {
