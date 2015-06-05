@@ -5,7 +5,7 @@ import org.bloomlang.bloom.compiler.ast._
 import org.kiama.==>
 import org.kiama.attribution.{Decorators, Attribution}
 import org.kiama.util.Messaging._
-import org.kiama.util.{MultipleEntity, UnknownEntity, Entity, Environments}
+import org.kiama.util._
 
 object SymbolTable extends Environments {
 
@@ -25,13 +25,22 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     collectmessages(tree) {
       case im@ImportModule(module) if moduleDefinition(module).isEmpty =>
         message(im, s"Module '$module' not defined.")
+
       case ip@ImportPackage(pkg) if packageDefinition(pkg).isEmpty =>
         message(ip, s"Package '$pkg' not found.")
+
       case iu@IdnUse(idn) if !isDefinedInEnv(defModuleEnv(iu), idn) =>
         message(iu, s"Unknown collection '$idn'.")
-      case id@IdnDef(idn) if lookup(defModuleEnv(id), idn, UnknownEntity()) == MultipleEntity() =>
+
+      case iu@IdnUse(idn) if hasMultipleDefinition(iu, idn) =>
+        message(iu, s"Symbol '$idn' was defined multiple times.")
+
+      case id@IdnDef(idn) if hasMultipleDefinition(id, idn) =>
         message(id, s"Symbol '$idn' was defined multiple times.")
     }
+
+  private def hasMultipleDefinition(node: Node, identifier: String) =
+    lookup(defModuleEnv(node), identifier, UnknownEntity()) == MultipleEntity()
 
   def moduleDefinition(name: String): Option[Module] = {
     definedModules.find(m => m.name.name == name)

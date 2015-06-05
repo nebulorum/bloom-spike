@@ -69,6 +69,14 @@ class AnalyserTest extends FunSuite {
     test.errorLabels shouldBe Seq("Symbol 'table2' was defined multiple times.")
   }
 
+  test("report double definition of a symbol in module two different modules") {
+    val test = makeTestProgram()(
+      makeModule("A", makeTable("table1")),
+      makeModule("B", makeTable("table1")),
+      makeModule("C", ImportModule("A"), ImportModule("B"), rule1))
+    test.errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
+  }
+
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
   }
