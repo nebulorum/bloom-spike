@@ -43,7 +43,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     lookup(defModuleEnv(node), identifier, UnknownEntity()) == MultipleEntity()
 
   def moduleDefinition(name: String): Option[Module] = {
-    definedModules.find(m => m.name.name == name)
+    definedModules.find(m => m.name == name)
   }
 
   private def packageDefinition(name: String): Option[Package] = definedPackages.find(p => p.name == name)

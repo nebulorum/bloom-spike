@@ -14,7 +14,7 @@ case class Program(packages:Seq[Package], containers: Seq[ModuleContainer]) exte
 
 case class ModuleContainer(statements: Seq[Node]) extends Node
 
-case class Module(name: IdnDef, statements: Seq[Node]) extends Node
+case class Module(name: String, statements: Seq[Node]) extends Node
 
 case class Package(name: String) extends Node
 

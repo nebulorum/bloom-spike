@@ -37,9 +37,9 @@ class AnalyserTest extends FunSuite {
   }
 
   test("can find table on another module without alias") {
-    definedSymbols(analyzer, rule1) shouldBe Set("SomeModule", "table1")
-    definedSymbols(analyzer, table2) shouldBe Set("OtherModule", "table2")
-    definedSymbols2(analyzer, rule1) shouldBe Set("OtherModule", "SomeModule", "table1", "table2")
+    definedSymbols(analyzer, rule1) shouldBe Set("table1")
+    definedSymbols(analyzer, table2) shouldBe Set("table2")
+    definedSymbols2(analyzer, rule1) shouldBe Set("table1", "table2")
   }
 
   test("report missing module on import") {
@@ -53,7 +53,7 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing table definition") {
-    val test = makeTestProgram()(Module(IdnDef("a"), Seq(rule1)))
+    val test = makeTestProgram()(makeModule("a", rule1))
     test.errorLabels shouldBe Seq("Unknown collection 'table1'.")
   }
 
@@ -85,7 +85,7 @@ class AnalyserTest extends FunSuite {
     new TestAnalyzer(Program(pkgs, Seq(ModuleContainer(stmts))))
 
   private def makeModule(moduleName:String, stmts: Node*) =
-    Module(IdnDef(moduleName), stmts)
+    Module(moduleName, stmts)
 
   private def makeTable(tableName: String): Table = {
     Table(IdnDef(tableName))
