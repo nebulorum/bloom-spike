@@ -28,7 +28,9 @@ case class TypeDeclaration(typeName: IdnDef) extends PackageDeclaration {
 
 trait Collection extends Node
 
-case class Table(name: IdnDef) extends Collection
+case class FieldDeclaration(name:String, typ: IdnUse) extends Node
+
+case class Table(name: IdnDef, fields: Seq[FieldDeclaration]) extends Collection
 
 case class CollectionRef(idn: IdnUse) extends Node
 

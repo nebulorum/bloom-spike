@@ -7,12 +7,13 @@ import org.kiama.util.Messaging._
 
 class AnalyserTest extends FunSuite {
 
-  val package1 = makePackage("system.bloom",
-    makeType("Int")
+  val systemPackage = makePackage("system.bloom",
+    makeType("Int"),
+    makeType("String")
   )
 
-  val table1 = makeTable("table1")
-  val table2 = makeTable("table2")
+  val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
+  val table2 = makeTable("table2", "id" -> "Int", "value" -> "Int")
 
   val rule1 = makeRule("table1")
 
@@ -30,7 +31,7 @@ class AnalyserTest extends FunSuite {
     otherModule
   ))
 
-  val program = Program(Seq(package1), Seq(userModules))
+  val program = Program(Seq(systemPackage), Seq(userModules))
   val analyzer = new Analyzer(ProgramTree(program))
 
   test("can locate modules in a program") {
@@ -46,12 +47,12 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing module on import") {
-    analyzeProgram()(module1).
+    analyzeProgram(systemPackage)(importSystemBloom, module1).
       errorLabels shouldBe Seq("Module 'OtherModule' not defined.")
   }
 
   test("report missing package import") {
-    analyzeProgram()(importSystemBloom, otherModule).
+    analyzeProgram()(importSystemBloom).
       errorLabels shouldBe Seq("Package 'system.bloom' not found.")
   }
 
@@ -61,7 +62,7 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report double definition of a symbol") {
-    analyzeProgram()(makeModule("a", table1, makeTable("table1"))).
+    analyzeProgram(systemPackage)(makeModule("a", importSystemBloom, table1, makeTable("table1"))).
       errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
   }
 
@@ -71,18 +72,18 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing type definition if package not imported") {
-    analyzeProgram(package1)(makeModule("A", makeRule("Int"))).
+    analyzeProgram(systemPackage)(makeModule("A", makeRule("Int"))).
       errorLabels shouldBe Seq("Symbol 'Int' not defined.")
   }
 
   test("report using type in place of collection") {
-    analyzeProgram(package1)(importSystemBloom, makeModule("A", makeRule("Int"))).
+    analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int"))).
       errorLabels shouldBe Seq("Expected collection declaration, found type 'Int'.")
   }
 
   test("report double definition of a symbol in module import and local") {
-    analyzeProgram()(
-      otherModule,
+    analyzeProgram(systemPackage)(
+      importSystemBloom, otherModule,
       makeModule("a", ImportModule("OtherModule"), makeTable("table2"))).
       errorLabels shouldBe Seq("Symbol 'table2' was defined multiple times.")
   }
@@ -95,6 +96,21 @@ class AnalyserTest extends FunSuite {
       errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
   }
 
+  test("report missing type on a table definition") {
+    analyzeProgram()(
+      makeModule("BadCollection", makeTable("badTable", "id" -> "Int"))).
+      errorLabels shouldBe Seq("Symbol 'Int' not defined.")
+  }
+
+  test("report using collection in type position") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseTableOnTypePosition",
+        table1,
+        makeTable("table2", "id" -> "table1"))).
+      errorLabels shouldBe Seq("Expected type declaration, found table 'table1'.")
+  }
+
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
   }
@@ -105,8 +121,8 @@ class AnalyserTest extends FunSuite {
   private def makeModule(moduleName: String, stmts: Node*) =
     Module(moduleName, stmts)
 
-  private def makeTable(tableName: String): Table = {
-    Table(IdnDef(tableName))
+  private def makeTable(tableName: String, fields: (String,String)*): Table = {
+    Table(IdnDef(tableName), fields.map(p => FieldDeclaration(p._1, IdnUse(p._2))))
   }
 
   private def makeRule(lhs: String) = Rule(CollectionRef(IdnUse(lhs)))

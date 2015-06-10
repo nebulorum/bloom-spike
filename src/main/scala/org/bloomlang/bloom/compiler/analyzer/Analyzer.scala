@@ -45,11 +45,16 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case CollectionEntity(_) => noMessages
           case other => message(idn, s"Expected collection declaration, found ${describeEntity(other)}.")
         }
+      case FieldDeclaration(_, id@IdnUse(idn)) =>
+        checkuse(lookup(defModuleEnv(id), idn, UnknownEntity())) {
+          case TypeEntity(_) => noMessages
+          case entity => message(idn, s"Expected type declaration, found ${describeEntity(entity)}.")
+        }
     }
 
   private def describeEntity(entity: Entity): String =
     entity match {
-      case CollectionEntity(Table(IdnDef(name))) => s"table '$name'"
+      case CollectionEntity(Table(IdnDef(name), _)) => s"table '$name'"
       case entity: TypeEntity => entity.definedAt.describe
       case rest => rest.toString
     }
