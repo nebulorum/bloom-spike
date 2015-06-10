@@ -18,19 +18,15 @@ case class Module(name: String, statements: Seq[Node]) extends Node
 
 case class Package(name: String, declarations: Seq[PackageDeclaration]) extends Node
 
-trait PackageDeclaration extends Node {
-  def describe:String
-}
+trait PackageDeclaration extends Node
 
-case class TypeDeclaration(typeName: IdnDef) extends PackageDeclaration {
-  def describe = s"type '${typeName.name}'"
-}
+case class TypeDeclaration(typeIdn: IdnDef) extends PackageDeclaration
 
 trait Collection extends Node
 
 case class FieldDeclaration(name:String, typ: IdnUse) extends Node
 
-case class Table(name: IdnDef, fields: Seq[FieldDeclaration]) extends Collection
+case class Table(tableIdn: IdnDef, fields: Seq[FieldDeclaration]) extends Collection
 
 case class CollectionRef(idn: IdnUse) extends Node
 

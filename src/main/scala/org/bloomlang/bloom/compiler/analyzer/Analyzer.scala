@@ -9,9 +9,19 @@ import org.kiama.util._
 
 object SymbolTable extends Environments {
 
-  case class CollectionEntity(definedAt: Collection) extends Entity
+  trait BloomEntity extends Entity {
+    def description: String
+  }
 
-  case class TypeEntity(definedAt: TypeDeclaration) extends Entity
+  case class CollectionEntity(definedAt: Collection) extends BloomEntity {
+    def description = definedAt match {
+      case t: Table => s"table '${t.tableIdn.name}'"
+    }
+  }
+
+  case class TypeEntity(definedAt: TypeDeclaration) extends BloomEntity {
+    def description = s"type '${definedAt.typeIdn.name}'"
+  }
 
 }
 
@@ -41,12 +51,12 @@ class Analyzer(tree: ProgramTree) extends Attribution {
         message(id, s"Symbol '$idn' was defined multiple times.")
 
       case CollectionRef(id@IdnUse(idn)) =>
-        checkuse(lookup(defModuleEnv(id), idn, UnknownEntity())) {
+        checkuse(entityWithName(id, idn)) {
           case CollectionEntity(_) => noMessages
           case other => message(idn, s"Expected collection declaration, found ${describeEntity(other)}.")
         }
       case FieldDeclaration(_, id@IdnUse(idn)) =>
-        checkuse(lookup(defModuleEnv(id), idn, UnknownEntity())) {
+        checkuse(entityWithName(id, idn)) {
           case TypeEntity(_) => noMessages
           case entity => message(idn, s"Expected type declaration, found ${describeEntity(entity)}.")
         }
@@ -54,13 +64,15 @@ class Analyzer(tree: ProgramTree) extends Attribution {
 
   private def describeEntity(entity: Entity): String =
     entity match {
-      case CollectionEntity(Table(IdnDef(name), _)) => s"table '$name'"
-      case entity: TypeEntity => entity.definedAt.describe
+      case entity: BloomEntity => entity.description
       case rest => rest.toString
     }
 
   private def hasMultipleDefinition(node: Node, identifier: String) =
-    lookup(defModuleEnv(node), identifier, UnknownEntity()) == MultipleEntity()
+    entityWithName(node, identifier) == MultipleEntity()
+
+  private def entityWithName(node: Node, identifier: String) =
+    lookup(defModuleEnv(node), identifier, UnknownEntity())
 
   def moduleDefinition(name: String): Option[Module] = {
     definedModules.find(m => m.name == name)
