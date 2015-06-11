@@ -9,8 +9,7 @@ class AnalyserTest extends FunSuite {
 
   val systemPackage = makePackage("system.bloom",
     makeType("Int"),
-    makeType("String")
-  )
+    makeType("String"))
 
   val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
   val table2 = makeTable("table2", "id" -> "Int", "value" -> "Int")
@@ -21,6 +20,7 @@ class AnalyserTest extends FunSuite {
     ImportModule("OtherModule"),
     table1,
     rule1)
+
   val otherModule = makeModule("OtherModule", table2)
 
   val importSystemBloom = ImportPackage("system.bloom")
@@ -28,8 +28,7 @@ class AnalyserTest extends FunSuite {
   val userModules = ModuleContainer(Seq(
     importSystemBloom,
     module1,
-    otherModule
-  ))
+    otherModule))
 
   val program = Program(Seq(systemPackage), Seq(userModules))
   val analyzer = new Analyzer(ProgramTree(program))
@@ -78,7 +77,7 @@ class AnalyserTest extends FunSuite {
 
   test("report using type in place of collection") {
     analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int", null))).
-      errorLabels shouldBe Seq("Expected collection declaration, found type 'Int'.")
+      errorLabels shouldBe Seq("Expected reference to collection, found type 'Int'.")
   }
 
   test("report double definition of a symbol in module import and local") {
@@ -108,7 +107,7 @@ class AnalyserTest extends FunSuite {
       makeModule("UseTableOnTypePosition",
         table1,
         makeTable("table2", "id" -> "table1"))).
-      errorLabels shouldBe Seq("Expected type declaration, found table 'table1'.")
+      errorLabels shouldBe Seq("Expected reference to type, found table 'table1'.")
   }
 
   test("report duplicated collection alias") {
@@ -134,7 +133,7 @@ class AnalyserTest extends FunSuite {
       makeModule("UseTypeInRHS",
         table1,
         makeRule("table1", makeProduct("String" -> "s")))).
-      errorLabels shouldBe Seq("Expected collection reference, found type 'String'.")
+      errorLabels shouldBe Seq("Expected reference to collection, found type 'String'.")
   }
 
   test("alias can be identical to existing collection name") {
@@ -163,7 +162,7 @@ class AnalyserTest extends FunSuite {
   private def makeRule(lhs: String, product: CollectionProduct) = Rule(CollectionRef(IdnUse(lhs)), product)
 
   private def makeProduct(aliases: (String, String)*) =
-    CollectionProduct(aliases.map(p => Alias(IdnUse(p._1), IdnDef(p._2))))
+    CollectionProduct(aliases.map(p => Alias(CollectionRef(IdnUse(p._1)), IdnDef(p._2))))
 
   private def makeType(name: String) = TypeDeclaration(IdnDef(name))
 

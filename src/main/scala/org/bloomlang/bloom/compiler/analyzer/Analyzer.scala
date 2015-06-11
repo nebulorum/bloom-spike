@@ -24,7 +24,7 @@ object SymbolTable extends Environments {
   }
 
   case class AliasEntity(definedAt: Alias) extends BloomEntity {
-    def description = s"alias '${definedAt.alias.name}' to collection '${definedAt.name.name}"
+    def description = s"alias '${definedAt.alias.name}' to collection '${definedAt.collection.idn.name}"
   }
 
 }
@@ -57,17 +57,12 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case CollectionRef(id@IdnUse(idn)) =>
         checkuse(entityWithName(id, idn)) {
           case CollectionEntity(_) => noMessages
-          case entity => message(idn, s"Expected collection declaration, found ${describeEntity(entity)}.")
+          case entity => message(idn, s"Expected reference to collection, found ${describeEntity(entity)}.")
         }
       case FieldDeclaration(_, id@IdnUse(idn)) =>
         checkuse(entityWithName(id, idn)) {
           case TypeEntity(_) => noMessages
-          case entity => message(idn, s"Expected type declaration, found ${describeEntity(entity)}.")
-        }
-      case Alias(id@IdnUse(idn),_) =>
-        checkuse(entityWithName(id, idn)) {
-          case CollectionEntity(_) => noMessages
-          case entity => message(idn, s"Expected collection reference, found ${describeEntity(entity)}.")
+          case entity => message(idn, s"Expected reference to type, found ${describeEntity(entity)}.")
         }
     }
 
