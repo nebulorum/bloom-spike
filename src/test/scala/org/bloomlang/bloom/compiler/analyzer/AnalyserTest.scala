@@ -15,7 +15,7 @@ class AnalyserTest extends FunSuite {
   val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
   val table2 = makeTable("table2", "id" -> "Int", "value" -> "Int")
 
-  val rule1 = makeRule("table1")
+  val rule1 = makeRule("table1", null)
 
   val module1 = makeModule("SomeModule",
     ImportModule("OtherModule"),
@@ -72,12 +72,12 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing type definition if package not imported") {
-    analyzeProgram(systemPackage)(makeModule("A", makeRule("Int"))).
+    analyzeProgram(systemPackage)(makeModule("A", makeRule("Int", null))).
       errorLabels shouldBe Seq("Symbol 'Int' not defined.")
   }
 
   test("report using type in place of collection") {
-    analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int"))).
+    analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int", null))).
       errorLabels shouldBe Seq("Expected collection declaration, found type 'Int'.")
   }
 
@@ -111,6 +111,41 @@ class AnalyserTest extends FunSuite {
       errorLabels shouldBe Seq("Expected type declaration, found table 'table1'.")
   }
 
+  test("report duplicated collection alias") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseDuplicateAlias",
+        table1, table2,
+        makeRule("table1", makeProduct("table1" -> "s", "table2" -> "s")))).
+      errorLabels shouldBe Seq("Symbol 's' was defined multiple times.")
+  }
+
+  test("report product using undefined symbol") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseNotDefinedTable",
+        table1,
+        makeRule("table1", makeProduct("tableNotThere" -> "tnt")))).
+      errorLabels shouldBe Seq("Symbol 'tableNotThere' not defined.")
+  }
+  test("report product using non collection in rule alias") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseTypeInRHS",
+        table1,
+        makeRule("table1", makeProduct("String" -> "s")))).
+      errorLabels shouldBe Seq("Expected collection reference, found type 'String'.")
+  }
+
+  test("alias can be identical to existing collection name") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseTableInAlias",
+        table1, table2,
+        makeRule("table1", makeProduct("table2" -> "a", "table1" -> "table1")))).
+      errorLabels shouldBe noMessages
+  }
+
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
   }
@@ -121,11 +156,14 @@ class AnalyserTest extends FunSuite {
   private def makeModule(moduleName: String, stmts: Node*) =
     Module(moduleName, stmts)
 
-  private def makeTable(tableName: String, fields: (String,String)*): Table = {
+  private def makeTable(tableName: String, fields: (String, String)*): Table = {
     Table(IdnDef(tableName), fields.map(p => FieldDeclaration(p._1, IdnUse(p._2))))
   }
 
-  private def makeRule(lhs: String) = Rule(CollectionRef(IdnUse(lhs)))
+  private def makeRule(lhs: String, product: CollectionProduct) = Rule(CollectionRef(IdnUse(lhs)), product)
+
+  private def makeProduct(aliases: (String, String)*) =
+    CollectionProduct(aliases.map(p => Alias(IdnUse(p._1), IdnDef(p._2))))
 
   private def makeType(name: String) = TypeDeclaration(IdnDef(name))
 
@@ -137,6 +175,7 @@ class AnalyserTest extends FunSuite {
 
   class TestAnalyzer(val program: Program) {
     val analyzer = new Analyzer(ProgramTree(program))
+
     def errorLabels = analyzer.errors.map(_.label)
   }
 

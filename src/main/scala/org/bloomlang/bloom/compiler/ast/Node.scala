@@ -30,7 +30,11 @@ case class Table(tableIdn: IdnDef, fields: Seq[FieldDeclaration]) extends Collec
 
 case class CollectionRef(idn: IdnUse) extends Node
 
-case class Rule(lhs: CollectionRef) extends Node
+case class Alias(name: IdnUse, alias:IdnDef) extends Node
+
+case class CollectionProduct(product: Seq[Alias]) extends Node
+
+case class Rule(lhs: CollectionRef, product: CollectionProduct) extends Node
 
 case class ImportPackage(importedPackage: String) extends Node
 

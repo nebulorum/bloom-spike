@@ -23,6 +23,10 @@ object SymbolTable extends Environments {
     def description = s"type '${definedAt.typeIdn.name}'"
   }
 
+  case class AliasEntity(definedAt: Alias) extends BloomEntity {
+    def description = s"alias '${definedAt.alias.name}' to collection '${definedAt.name.name}"
+  }
+
 }
 
 class Analyzer(tree: ProgramTree) extends Attribution {
@@ -53,12 +57,17 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case CollectionRef(id@IdnUse(idn)) =>
         checkuse(entityWithName(id, idn)) {
           case CollectionEntity(_) => noMessages
-          case other => message(idn, s"Expected collection declaration, found ${describeEntity(other)}.")
+          case entity => message(idn, s"Expected collection declaration, found ${describeEntity(entity)}.")
         }
       case FieldDeclaration(_, id@IdnUse(idn)) =>
         checkuse(entityWithName(id, idn)) {
           case TypeEntity(_) => noMessages
           case entity => message(idn, s"Expected type declaration, found ${describeEntity(entity)}.")
+        }
+      case Alias(id@IdnUse(idn),_) =>
+        checkuse(entityWithName(id, idn)) {
+          case CollectionEntity(_) => noMessages
+          case entity => message(idn, s"Expected collection reference, found ${describeEntity(entity)}.")
         }
     }
 
@@ -95,12 +104,12 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     case _: Program =>
       rootenv()
 
-    case node@(_: Module | _: Package) =>
+    case node@(_: Module | _: Package | _: CollectionProduct) =>
       enter(in(node))
   }
 
   private def defEnvOut(out: Node => Environment): Node ==> Environment = {
-    case node@(_: Module | _: Package) =>
+    case node@(_: Module | _: Package | _: CollectionProduct) =>
       leave(out(node))
 
     case node@IdnDef(i) =>
@@ -111,12 +120,12 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     case _: Program =>
       rootenv()
 
-    case node@(_: Module | _: Package) =>
+    case node@(_: Module | _: Package | _: CollectionProduct) =>
       enter(in(node))
   }
 
   private def defModuleEnvOut(out: Node => Environment): Node ==> Environment = {
-    case node@(_: Module | _: Package) =>
+    case node@(_: Module | _: Package | _: CollectionProduct) =>
       leave(out(node))
 
     case i@ImportModule(module) if moduleDefinition(module).isDefined =>
@@ -139,6 +148,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
         p match {
           case decl: TypeDeclaration => TypeEntity(decl)
           case decl: Table => CollectionEntity(decl)
+          case decl: Alias => AliasEntity(decl)
         }
     }
 
