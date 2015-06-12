@@ -156,17 +156,18 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       leave(out(node))
 
     case i@ImportModule(module) if moduleDefinition(module).isDefined =>
-      val m = moduleDefinition(module).get
-      val mEnv = defEnv(tree.lastChild(m).head)
-      mEnv.head.foldLeft(out(i))((e, sd) => defineIfNew(e, sd._1, sd._2))
+      mergeEnvironment(moduleDefinition(module).get, out(i))
 
     case i@ImportPackage(name) if packageDefinition(name).isDefined =>
-      val m = packageDefinition(name).get
-      val mEnv = defEnv(tree.lastChild(m).head)
-      mEnv.head.foldLeft(out(i))((e, sd) => defineIfNew(e, sd._1, sd._2))
+      mergeEnvironment(packageDefinition(name).get, out(i))
 
     case node@IdnDef(i) =>
       defineIfNew(out(node), i, defEntity(node))
+  }
+
+  private def mergeEnvironment(otherEnvironmentDefiningNode: Node, originalEnv: Environment): Environment = {
+    val envToMerge = defEnv(tree.lastChild(otherEnvironmentDefiningNode).head)
+    envToMerge.head.foldLeft(originalEnv)((e, sd) => defineIfNew(e, sd._1, sd._2))
   }
 
   lazy val defEntity: IdnDef => Entity =
