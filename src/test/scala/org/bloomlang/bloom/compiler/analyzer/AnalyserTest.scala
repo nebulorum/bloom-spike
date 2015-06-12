@@ -43,6 +43,8 @@ class AnalyserTest extends FunSuite {
     definedSymbols(analyzer, rule1) shouldBe Set("table1")
     definedSymbols(analyzer, table2) shouldBe Set("table2")
     definedSymbols2(analyzer, rule1) shouldBe Set("table1", "table2")
+    definedSymbols2(analyzer, table1.declaration.fields.last) shouldBe Set("key", "value")
+    definedSymbols2(analyzer, table2.declaration.fields.last) shouldBe Set("id", "value")
   }
 
   test("report missing module on import") {
@@ -191,7 +193,7 @@ class AnalyserTest extends FunSuite {
     Module(moduleName, stmts)
 
   private def makeTable(tableName: String, fields: (String, String)*): Table = {
-    Table(IdnDef(tableName), fields.map(p => FieldDeclaration(p._1, IdnUse(p._2))))
+    Table(IdnDef(tableName), FieldDeclarations(fields.map(p => FieldDeclaration(IdnDef(p._1), IdnUse(p._2)))))
   }
 
   private def makeRule(lhs: String, product: Seq[Alias], producer: Seq[FieldAccessor]) =

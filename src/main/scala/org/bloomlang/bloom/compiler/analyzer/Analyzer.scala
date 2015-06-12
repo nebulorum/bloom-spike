@@ -27,8 +27,8 @@ object SymbolTable extends Environments {
     def description = s"alias '${definedAt.alias.name}' to collection '${definedAt.collection.idn.name}"
   }
 
-  case class FieldEntity(definedAt: AnyRef) extends BloomEntity {
-    def description = ???
+  case class FieldEntity(definedAt: FieldDeclaration) extends BloomEntity {
+    def description = s"field '${definedAt.idn.name}'"
   }
 
 }
@@ -49,7 +49,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case ip@ImportPackage(pkg) if packageDefinition(pkg).isEmpty =>
         message(ip, s"Package '$pkg' not found.")
 
-      case iu@IdnUse(idn) if !isDefinedInEnv(defModuleEnv(iu), idn) =>
+      case iu@IdnUse(idn) if entityWithName(iu, idn) == UnknownEntity() =>
         message(iu, s"Symbol '$idn' not defined.")
 
       //Need because duplicate definition in imported modules
@@ -112,12 +112,12 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     case _: Program =>
       rootenv()
 
-    case node@(_: Module | _: Package | _: CollectionProduct) =>
+    case node@(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations) =>
       enter(in(node))
   }
 
   private def defEnvOut(out: Node => Environment): Node ==> Environment = {
-    case node@(_: Module | _: Package | _: CollectionProduct) =>
+    case node@(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations) =>
       leave(out(node))
 
     case node@IdnDef(i) =>
@@ -128,12 +128,12 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     case _: Program =>
       rootenv()
 
-    case node@(_: Module | _: Package | _: CollectionProduct) =>
+    case node@(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations) =>
       enter(in(node))
   }
 
   private def defModuleEnvOut(out: Node => Environment): Node ==> Environment = {
-    case node@(_: Module | _: Package | _: CollectionProduct) =>
+    case node@(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations) =>
       leave(out(node))
 
     case i@ImportModule(module) if moduleDefinition(module).isDefined =>
