@@ -14,7 +14,7 @@ class AnalyserTest extends FunSuite {
   val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
   val table2 = makeTable("table2", "id" -> "Int", "value" -> "Int")
 
-  val rule1 = makeRule("table1", null, null)
+  val rule1 = makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", "a.value"))
 
   val module1 = makeModule("SomeModule",
     ImportModule("OtherModule"),
@@ -59,7 +59,7 @@ class AnalyserTest extends FunSuite {
 
   test("report missing table definition") {
     analyzeProgram()(makeModule("a", rule1)).
-      errorLabels shouldBe Seq("Symbol 'table1' not defined.")
+      errorLabels should contain("Symbol 'table1' not defined.")
   }
 
   test("report double definition of a symbol") {
@@ -94,7 +94,7 @@ class AnalyserTest extends FunSuite {
       makeModule("A", makeTable("table1")),
       makeModule("B", makeTable("table1")),
       makeModule("C", ImportModule("A"), ImportModule("B"), rule1)).
-      errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
+      errorLabels should contain("Symbol 'table1' was defined multiple times.")
   }
 
   test("report missing type on a table definition") {

@@ -88,8 +88,27 @@ class Analyzer(tree: ProgramTree) extends Attribution {
   private def hasMultipleDefinition(node: Node, identifier: String) =
     entityWithName(node, identifier) == MultipleEntity()
 
-  private def entityWithName(node: Node, identifier: String) =
-    lookup(defModuleEnv(node), identifier, UnknownEntity())
+  private def findField(entity: Entity, fieldIdn: IdnUse): Entity = {
+    entity match {
+      case AliasEntity(alias@Alias(CollectionRef(IdnUse(tableName)),_)) =>
+        entityWithName(alias, tableName) match {
+          case CollectionEntity(table: Table) =>
+            entityWithName(tree.lastChild(table.declaration).head, fieldIdn.name)
+          case _ => UnknownEntity()
+        }
+      case _ => UnknownEntity()
+    }
+  }
+
+  private def entityWithName(node: Node, identifier: String):Entity = {
+    node match {
+      // Follow field to collection declaration f == f1 ensure we only check the field usage point
+      case tree.parent.pair(f1, FieldAccessor(alias, f)) if f == f1 =>
+        findField(entityWithName(alias, alias.name), f)
+      case _ =>
+        lookup(defModuleEnv(node), identifier, UnknownEntity())
+    }
+  }
 
   def moduleDefinition(name: String): Option[Module] = {
     definedModules.find(m => m.name == name)
