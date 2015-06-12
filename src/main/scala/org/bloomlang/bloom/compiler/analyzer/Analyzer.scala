@@ -27,6 +27,10 @@ object SymbolTable extends Environments {
     def description = s"alias '${definedAt.alias.name}' to collection '${definedAt.collection.idn.name}"
   }
 
+  case class FieldEntity(definedAt: AnyRef) extends BloomEntity {
+    def description = ???
+  }
+
 }
 
 class Analyzer(tree: ProgramTree) extends Attribution {
@@ -48,6 +52,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case iu@IdnUse(idn) if !isDefinedInEnv(defModuleEnv(iu), idn) =>
         message(iu, s"Symbol '$idn' not defined.")
 
+      //Need because duplicate definition in imported modules
       case iu@IdnUse(idn) if hasMultipleDefinition(iu, idn) =>
         message(iu, s"Symbol '$idn' was defined multiple times.")
 
@@ -63,6 +68,14 @@ class Analyzer(tree: ProgramTree) extends Attribution {
         checkuse(entityWithName(id, idn)) {
           case TypeEntity(_) => noMessages
           case entity => message(idn, s"Expected reference to type, found ${describeEntity(entity)}.")
+        }
+      case FieldAccessor(id@IdnUse(idn), fid@IdnUse(fidn)) =>
+        checkuse(entityWithName(id, idn)) {
+          case AliasEntity(_) => noMessages
+          case entity => message(idn, s"Expected collection alias, found ${describeEntity(entity)}.")
+        } ++ checkuse(entityWithName(fid, fidn)) {
+          case FieldEntity(_) => noMessages
+          case entity => message(idn, s"Expected field, found ${describeEntity(entity)}.")
         }
     }
 
@@ -144,6 +157,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case decl: TypeDeclaration => TypeEntity(decl)
           case decl: Table => CollectionEntity(decl)
           case decl: Alias => AliasEntity(decl)
+          case decl: FieldDeclaration => FieldEntity(decl)
         }
     }
 

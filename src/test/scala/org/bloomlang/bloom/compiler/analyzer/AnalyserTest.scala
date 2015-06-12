@@ -14,7 +14,7 @@ class AnalyserTest extends FunSuite {
   val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
   val table2 = makeTable("table2", "id" -> "Int", "value" -> "Int")
 
-  val rule1 = makeRule("table1", null)
+  val rule1 = makeRule("table1", null, null)
 
   val module1 = makeModule("SomeModule",
     ImportModule("OtherModule"),
@@ -71,12 +71,12 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing type definition if package not imported") {
-    analyzeProgram(systemPackage)(makeModule("A", makeRule("Int", null))).
+    analyzeProgram(systemPackage)(makeModule("A", makeRule("Int", null, null))).
       errorLabels shouldBe Seq("Symbol 'Int' not defined.")
   }
 
   test("report using type in place of collection") {
-    analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int", null))).
+    analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int", null, null))).
       errorLabels shouldBe Seq("Expected reference to collection, found type 'Int'.")
   }
 
@@ -115,7 +115,7 @@ class AnalyserTest extends FunSuite {
       importSystemBloom,
       makeModule("UseDuplicateAlias",
         table1, table2,
-        makeRule("table1", makeProduct("table1" -> "s", "table2" -> "s")))).
+        makeRule("table1", makeProduct("table1" -> "s", "table2" -> "s"), null))).
       errorLabels shouldBe Seq("Symbol 's' was defined multiple times.")
   }
 
@@ -124,7 +124,7 @@ class AnalyserTest extends FunSuite {
       importSystemBloom,
       makeModule("UseNotDefinedTable",
         table1,
-        makeRule("table1", makeProduct("tableNotThere" -> "tnt")))).
+        makeRule("table1", makeProduct("tableNotThere" -> "tnt"), null))).
       errorLabels shouldBe Seq("Symbol 'tableNotThere' not defined.")
   }
   test("report product using non collection in rule alias") {
@@ -132,7 +132,7 @@ class AnalyserTest extends FunSuite {
       importSystemBloom,
       makeModule("UseTypeInRHS",
         table1,
-        makeRule("table1", makeProduct("String" -> "s")))).
+        makeRule("table1", makeProduct("String" -> "s"), null))).
       errorLabels shouldBe Seq("Expected reference to collection, found type 'String'.")
   }
 
@@ -141,8 +141,43 @@ class AnalyserTest extends FunSuite {
       importSystemBloom,
       makeModule("UseTableInAlias",
         table1, table2,
-        makeRule("table1", makeProduct("table2" -> "a", "table1" -> "table1")))).
+        makeRule("table1", makeProduct("table1" -> "a", "table1" -> "table1"), null))).
       errorLabels shouldBe noMessages
+  }
+
+  test("report rule RHS using unknown collection alias") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseUnknownAlias",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("b.key"))
+      )).errorLabels shouldBe Seq("Symbol 'b' not defined.", "Symbol 'key' not defined.")
+  }
+
+  test("report rule RHS field accessor must be an alias to collection and field") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseOtherSymbolOnAliasPosition",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("Int.id", "table1.key"))
+      )).errorLabels shouldBe
+      Seq(
+        "Expected collection alias, found type 'Int'.",
+        "Expected collection alias, found table 'table1'.",
+        "Symbol 'id' not defined.",
+        "Symbol 'key' not defined.")
+  }
+
+  test("report rule RHS field must refer to fields") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseOtherSymbolOnAliasPosition",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.Int", "a.table1"))
+      )).errorLabels shouldBe
+      Seq(
+        "Expected field, found type 'Int'.",
+        "Expected field, found table 'table1'.")
   }
 
   test("good program should have no messages") {
@@ -159,10 +194,18 @@ class AnalyserTest extends FunSuite {
     Table(IdnDef(tableName), fields.map(p => FieldDeclaration(p._1, IdnUse(p._2))))
   }
 
-  private def makeRule(lhs: String, product: CollectionProduct) = Rule(CollectionRef(IdnUse(lhs)), product)
+  private def makeRule(lhs: String, product: Seq[Alias], producer: Seq[FieldAccessor]) =
+    Rule(CollectionRef(IdnUse(lhs)), CollectionProduct(product, producer))
+
+  private def makeTupleProducer(values: String*): Seq[FieldAccessor] = values.map(v => {
+    val parts = v.split("\\.")
+    fieldAccess(parts(0), parts(1))
+  })
+
+  private def fieldAccess(alias: String, field: String) = FieldAccessor(IdnUse(alias), IdnUse(field))
 
   private def makeProduct(aliases: (String, String)*) =
-    CollectionProduct(aliases.map(p => Alias(CollectionRef(IdnUse(p._1)), IdnDef(p._2))))
+    aliases.map(p => Alias(CollectionRef(IdnUse(p._1)), IdnDef(p._2)))
 
   private def makeType(name: String) = TypeDeclaration(IdnDef(name))
 

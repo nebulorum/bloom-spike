@@ -32,7 +32,9 @@ case class CollectionRef(idn: IdnUse) extends Node
 
 case class Alias(collection: CollectionRef, alias:IdnDef) extends Node
 
-case class CollectionProduct(product: Seq[Alias]) extends Node
+case class CollectionProduct(product: Seq[Alias], tupleExpressions:Seq[FieldAccessor]) extends Node
+
+case class FieldAccessor(alias: IdnUse, field: IdnUse) extends Node
 
 case class Rule(lhs: CollectionRef, product: CollectionProduct) extends Node
 
