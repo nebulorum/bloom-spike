@@ -44,6 +44,10 @@ case class ImportPackage(importedPackage: String) extends Node
 
 case class ImportModule(importedModule: String) extends Node
 
-case class IdnDef(name: String) extends Node
+trait Identifier extends Node {
+  def idn: String
+}
 
-case class IdnUse(name: String) extends Node
+case class IdnDef(idn: String) extends Identifier
+
+case class IdnUse(idn: String) extends Identifier

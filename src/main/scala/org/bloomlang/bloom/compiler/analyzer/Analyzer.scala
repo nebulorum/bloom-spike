@@ -15,20 +15,20 @@ object SymbolTable extends Environments {
 
   case class CollectionEntity(definedAt: Collection) extends BloomEntity {
     def description = definedAt match {
-      case t: Table => s"table '${t.tableIdn.name}'"
+      case t: Table => s"table '${t.tableIdn.idn}'"
     }
   }
 
   case class TypeEntity(definedAt: TypeDeclaration) extends BloomEntity {
-    def description = s"type '${definedAt.typeIdn.name}'"
+    def description = s"type '${definedAt.typeIdn.idn}'"
   }
 
   case class AliasEntity(definedAt: Alias) extends BloomEntity {
-    def description = s"alias '${definedAt.alias.name}' to collection '${definedAt.collection.idn.name}"
+    def description = s"alias '${definedAt.alias.idn}' to collection '${definedAt.collection.idn.idn}"
   }
 
   case class FieldEntity(definedAt: FieldDeclaration) extends BloomEntity {
-    def description = s"field '${definedAt.idn.name}'"
+    def description = s"field '${definedAt.idn.idn}'"
   }
 
 }
@@ -49,33 +49,33 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case ip@ImportPackage(pkg) if packageDefinition(pkg).isEmpty =>
         message(ip, s"Package '$pkg' not found.")
 
-      case iu@IdnUse(idn) if entityWithName(iu, idn) == UnknownEntity() =>
+      case iu@IdnUse(idn) if entityWithName(iu) == UnknownEntity() =>
         message(iu, s"Symbol '$idn' not defined.")
 
       //Need because duplicate definition in imported modules
-      case iu@IdnUse(idn) if hasMultipleDefinition(iu, idn) =>
+      case iu@IdnUse(idn) if hasMultipleDefinition(iu) =>
         message(iu, s"Symbol '$idn' was defined multiple times.")
 
-      case id@IdnDef(idn) if hasMultipleDefinition(id, idn) =>
+      case id@IdnDef(idn) if hasMultipleDefinition(id) =>
         message(id, s"Symbol '$idn' was defined multiple times.")
 
       case CollectionRef(id@IdnUse(idn)) =>
-        checkuse(entityWithName(id, idn)) {
+        checkuse(entityWithName(id)) {
           case CollectionEntity(_) => noMessages
           case entity => message(idn, s"Expected reference to collection, found ${describeEntity(entity)}.")
         }
-      case FieldDeclaration(_, id@IdnUse(idn)) =>
-        checkuse(entityWithName(id, idn)) {
+      case FieldDeclaration(_, id: IdnUse) =>
+        checkuse(entityWithName(id)) {
           case TypeEntity(_) => noMessages
-          case entity => message(idn, s"Expected reference to type, found ${describeEntity(entity)}.")
+          case entity => message(id, s"Expected reference to type, found ${describeEntity(entity)}.")
         }
-      case FieldAccessor(id@IdnUse(idn), fid@IdnUse(fidn)) =>
-        checkuse(entityWithName(id, idn)) {
+      case FieldAccessor(id: IdnUse, fid:IdnUse) =>
+        checkuse(entityWithName(id)) {
           case AliasEntity(_) => noMessages
-          case entity => message(idn, s"Expected collection alias, found ${describeEntity(entity)}.")
-        } ++ checkuse(entityWithName(fid, fidn)) {
+          case entity => message(id, s"Expected collection alias, found ${describeEntity(entity)}.")
+        } ++ checkuse(entityWithName(fid)) {
           case FieldEntity(_) => noMessages
-          case entity => message(idn, s"Expected field, found ${describeEntity(entity)}.")
+          case entity => message(fid, s"Expected field, found ${describeEntity(entity)}.")
         }
     }
 
@@ -85,28 +85,28 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case rest => rest.toString
     }
 
-  private def hasMultipleDefinition(node: Node, identifier: String) =
-    entityWithName(node, identifier) == MultipleEntity()
+  private def hasMultipleDefinition(node: Identifier) =
+    entityWithName(node) == MultipleEntity()
 
   private def findField(entity: Entity, fieldIdn: IdnUse): Entity = {
     entity match {
-      case AliasEntity(alias@Alias(CollectionRef(IdnUse(tableName)),_)) =>
-        entityWithName(alias, tableName) match {
+      case AliasEntity(alias@Alias(CollectionRef(cid: IdnUse),_)) =>
+        entityWithName(cid) match {
           case CollectionEntity(table: Table) =>
-            entityWithName(tree.lastChild(table.declaration).head, fieldIdn.name)
+            lookup(defModuleEnv(tree.lastChild(table.declaration).head), fieldIdn.idn, UnknownEntity())
           case _ => UnknownEntity()
         }
       case _ => UnknownEntity()
     }
   }
 
-  private def entityWithName(node: Node, identifier: String):Entity = {
+  private def entityWithName(node: Identifier):Entity = {
     node match {
       // Follow field to collection declaration f == f1 ensure we only check the field usage point
       case tree.parent.pair(f1, FieldAccessor(alias, f)) if f == f1 =>
-        findField(entityWithName(alias, alias.name), f)
+        findField(entityWithName(alias), f)
       case _ =>
-        lookup(defModuleEnv(node), identifier, UnknownEntity())
+        lookup(defModuleEnv(node), node.idn, UnknownEntity())
     }
   }
 
