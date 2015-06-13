@@ -93,20 +93,21 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case AliasEntity(alias@Alias(CollectionRef(cid: IdnUse),_)) =>
         entityWithName(cid) match {
           case CollectionEntity(table: Table) =>
-            lookup(defModuleEnv(tree.lastChild(table.declaration).head), fieldIdn.idn, UnknownEntity())
+            lookup(finalEnvAt(table.declaration), fieldIdn.idn, UnknownEntity())
           case _ => UnknownEntity()
         }
       case _ => UnknownEntity()
     }
   }
 
-  private def entityWithName(node: Identifier):Entity = {
-    node match {
+  private lazy val entityWithName: Identifier => Entity = {
+    attr {
       // Follow field to collection declaration f == f1 ensure we only check the field usage point
       case tree.parent.pair(f1, FieldAccessor(alias, f)) if f == f1 =>
         findField(entityWithName(alias), f)
-      case _ =>
-        lookup(defModuleEnv(node), node.idn, UnknownEntity())
+      case node =>
+        // Cant use finalEnvAt(node) because this will cause two messages to popup on at each location.
+        lookup(defCompoundEnv(node), node.idn, UnknownEntity())
     }
   }
 
@@ -125,7 +126,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
   private lazy val definedPackages: Seq[Package] = tree.root.packages
 
   lazy val defEnv: Chain[Environment] = chain(defEnvIn, defEnvOut)
-  lazy val defModuleEnv: Chain[Environment] = chain(defModuleEnvIn, defModuleEnvOut)
+  lazy val defCompoundEnv: Chain[Environment] = chain(defCompoundEnvIn, defCompoundEnvOut)
 
   private def defEnvIn(in: Node => Environment): Node ==> Environment = {
     case _: Program =>
@@ -143,7 +144,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       defineIfNew(out(node), i, defEntity(node))
   }
 
-  private def defModuleEnvIn(in: Node => Environment): Node ==> Environment = {
+  private def defCompoundEnvIn(in: Node => Environment): Node ==> Environment = {
     case _: Program =>
       rootenv()
 
@@ -151,7 +152,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       enter(in(node))
   }
 
-  private def defModuleEnvOut(out: Node => Environment): Node ==> Environment = {
+  private def defCompoundEnvOut(out: Node => Environment): Node ==> Environment = {
     case node@(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations) =>
       leave(out(node))
 
@@ -164,6 +165,18 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     case node@IdnDef(i) =>
       defineIfNew(out(node), i, defEntity(node))
   }
+
+  /**
+   * This is the environment at the end of the block.
+   */
+  lazy val finalEnvAt: Node => Environment =
+      attr {
+        case tree.lastChild.pair(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations, c) =>
+          defCompoundEnv(c)
+
+        case tree.parent(p) =>
+          finalEnvAt(p)
+      }
 
   private def mergeEnvironment(otherEnvironmentDefiningNode: Node, originalEnv: Environment): Environment = {
     val envToMerge = defEnv(tree.lastChild(otherEnvironmentDefiningNode).head)

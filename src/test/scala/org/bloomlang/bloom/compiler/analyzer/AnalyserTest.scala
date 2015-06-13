@@ -63,7 +63,7 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report double definition of a symbol") {
-    analyzeProgram(systemPackage)(makeModule("a", importSystemBloom, table1, makeTable("table1"))).
+    analyzeProgram(systemPackage)(importSystemBloom, makeModule("a", table1, makeTable("table1"))).
       errorLabels shouldBe Seq("Symbol 'table1' was defined multiple times.")
   }
 
@@ -215,7 +215,7 @@ class AnalyserTest extends FunSuite {
 
   private def definedSymbols(analyzer: Analyzer, node: Node) = analyzer.defEnv(node).head.keySet
 
-  private def definedSymbols2(analyzer: Analyzer, node: Node) = analyzer.defModuleEnv(node).head.keySet
+  private def definedSymbols2(analyzer: Analyzer, node: Node) = analyzer.finalEnvAt(node).head.keySet
 
   class TestAnalyzer(val program: Program) {
     val analyzer = new Analyzer(ProgramTree(program))
