@@ -69,7 +69,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case TypeEntity(_) => noMessages
           case entity => message(id, s"Expected reference to type, found ${describeEntity(entity)}.")
         }
-      case FieldAccessor(id: IdnUse, fid:IdnUse) =>
+      case FieldAccessor(id: IdnUse, fid: IdnUse) =>
         checkuse(entityWithName(id)) {
           case AliasEntity(_) => noMessages
           case entity => message(id, s"Expected collection alias, found ${describeEntity(entity)}.")
@@ -77,6 +77,48 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case FieldEntity(_) => noMessages
           case entity => message(fid, s"Expected field, found ${describeEntity(entity)}.")
         }
+      case Rule(collection, producer) =>
+        entityWithName(collection.idn) match {
+          case CollectionEntity(t: Table) =>
+            val fieldDecl = t.declaration.fields
+            val tupleGens = producer.tupleExpressions
+            checkTupleArity(collection.idn, fieldDecl, tupleGens) ++ checkTypes(fieldDecl, tupleGens)
+          case _ =>
+            noMessages
+        }
+    }
+
+  private def checkTupleArity(collection: Node, fields: Seq[FieldDeclaration], gen: Seq[FieldAccessor]): Messages =
+    message(collection, s"Incorrect arity in rule, expected ${fields.size} found ${gen.size}",
+      fields.size != gen.size)
+
+  private def checkTypes(fieldDecls: Seq[FieldDeclaration], tupleGens: Seq[FieldAccessor]): Messages = {
+    val msgs: Seq[Messages] = for {
+      (decl, gen) <- fieldDecls zip tupleGens
+    } yield checkFieldAccessorType(decl, gen)
+    msgs.flatten.toVector
+  }
+
+  private def checkFieldAccessorType(decl: FieldDeclaration, accessor: FieldAccessor): Messages = {
+    val dentType = entityType(entityWithName(decl.typ))
+    val assessorType = entityTypeIfField(entityWithName(accessor.field))
+    if (dentType.isDefined && assessorType.isDefined && assessorType != dentType)
+      message(accessor, s"Expected type '${dentType.get.typeIdn.idn}' found '${assessorType.get.typeIdn.idn}'.")
+    else
+      noMessages
+  }
+
+  private def entityTypeIfField(entity: Entity): Option[TypeDeclaration] =
+    entity match {
+      case fe@FieldEntity(fd) => entityType(fe)
+      case _ => None
+    }
+
+  private def entityType(entity: Entity): Option[TypeDeclaration] =
+    entity match {
+      case FieldEntity(FieldDeclaration(_, typ)) => entityType(entityWithName(typ))
+      case TypeEntity(typ) => Some(typ)
+      case _ => None
     }
 
   private def describeEntity(entity: Entity): String =
@@ -90,7 +132,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
 
   private def findField(entity: Entity, fieldIdn: IdnUse): Entity = {
     entity match {
-      case AliasEntity(alias@Alias(CollectionRef(cid: IdnUse),_)) =>
+      case AliasEntity(alias@Alias(CollectionRef(cid: IdnUse), _)) =>
         entityWithName(cid) match {
           case CollectionEntity(table: Table) =>
             lookup(finalEnvAt(table.declaration), fieldIdn.idn, UnknownEntity())
@@ -170,13 +212,13 @@ class Analyzer(tree: ProgramTree) extends Attribution {
    * This is the environment at the end of the block.
    */
   lazy val finalEnvAt: Node => Environment =
-      attr {
-        case tree.lastChild.pair(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations, c) =>
-          defCompoundEnv(c)
+    attr {
+      case tree.lastChild.pair(_: Module | _: Package | _: CollectionProduct | _: FieldDeclarations, c) =>
+        defCompoundEnv(c)
 
-        case tree.parent(p) =>
-          finalEnvAt(p)
-      }
+      case tree.parent(p) =>
+        finalEnvAt(p)
+    }
 
   private def mergeEnvironment(otherEnvironmentDefiningNode: Node, originalEnv: Environment): Environment = {
     val envToMerge = defEnv(tree.lastChild(otherEnvironmentDefiningNode).head)

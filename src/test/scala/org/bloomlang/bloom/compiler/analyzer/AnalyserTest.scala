@@ -14,6 +14,9 @@ class AnalyserTest extends FunSuite {
   val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
   val table2 = makeTable("table2", "id" -> "Int", "value" -> "Int")
 
+  val nullTable1 = makeTable("table1")
+  val nullTable2 = makeTable("table2")
+
   val rule1 = makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", "a.value"))
 
   val module1 = makeModule("SomeModule",
@@ -73,12 +76,12 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing type definition if package not imported") {
-    analyzeProgram(systemPackage)(makeModule("A", makeRule("Int", null, null))).
+    analyzeProgram(systemPackage)(makeModule("A", makeRule("Int", Seq(), Seq()))).
       errorLabels shouldBe Seq("Symbol 'Int' not defined.")
   }
 
   test("report using type in place of collection") {
-    analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int", null, null))).
+    analyzeProgram(systemPackage)(importSystemBloom, makeModule("A", makeRule("Int", Seq(), Seq()))).
       errorLabels shouldBe Seq("Expected reference to collection, found type 'Int'.")
   }
 
@@ -116,8 +119,8 @@ class AnalyserTest extends FunSuite {
     analyzeProgram(systemPackage)(
       importSystemBloom,
       makeModule("UseDuplicateAlias",
-        table1, table2,
-        makeRule("table1", makeProduct("table1" -> "s", "table2" -> "s"), null))).
+        nullTable1, nullTable2,
+        makeRule("table1", makeProduct("table1" -> "s", "table2" -> "s"), Seq()))).
       errorLabels shouldBe Seq("Symbol 's' was defined multiple times.")
   }
 
@@ -125,16 +128,16 @@ class AnalyserTest extends FunSuite {
     analyzeProgram(systemPackage)(
       importSystemBloom,
       makeModule("UseNotDefinedTable",
-        table1,
-        makeRule("table1", makeProduct("tableNotThere" -> "tnt"), null))).
+        nullTable1,
+        makeRule("table1", makeProduct("tableNotThere" -> "tnt"), Seq()))).
       errorLabels shouldBe Seq("Symbol 'tableNotThere' not defined.")
   }
   test("report product using non collection in rule alias") {
     analyzeProgram(systemPackage)(
       importSystemBloom,
       makeModule("UseTypeInRHS",
-        table1,
-        makeRule("table1", makeProduct("String" -> "s"), null))).
+        nullTable1,
+        makeRule("table1", makeProduct("String" -> "s"), Seq()))).
       errorLabels shouldBe Seq("Expected reference to collection, found type 'String'.")
   }
 
@@ -142,8 +145,8 @@ class AnalyserTest extends FunSuite {
     analyzeProgram(systemPackage)(
       importSystemBloom,
       makeModule("UseTableInAlias",
-        table1, table2,
-        makeRule("table1", makeProduct("table1" -> "a", "table1" -> "table1"), null))).
+        nullTable1, nullTable2,
+        makeRule("table1", makeProduct("table1" -> "a", "table1" -> "table1"), Seq()))).
       errorLabels shouldBe noMessages
   }
 
@@ -151,7 +154,7 @@ class AnalyserTest extends FunSuite {
     analyzeProgram(systemPackage)(
       importSystemBloom,
       makeModule("UseUnknownAlias",
-        table1,
+        makeTable("table1", "key" -> "Int"),
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("b.key"))
       )).errorLabels shouldBe Seq("Symbol 'b' not defined.", "Symbol 'key' not defined.")
   }
@@ -180,6 +183,24 @@ class AnalyserTest extends FunSuite {
       Seq(
         "Expected field, found type 'Int'.",
         "Expected field, found table 'table1'.")
+  }
+
+  test("report incorrect arity in the RHS of rules") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseOtherSymbolOnAliasPosition",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key"))
+      )).errorLabels shouldBe Seq("Incorrect arity in rule, expected 2 found 1")
+  }
+
+  test("report incorrect type on RHS tuple producer") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseOtherSymbolOnAliasPosition",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.value", "a.key"))
+      )).errorLabels shouldBe Seq("Expected type 'Int' found 'String'.", "Expected type 'String' found 'Int'.")
   }
 
   test("good program should have no messages") {
