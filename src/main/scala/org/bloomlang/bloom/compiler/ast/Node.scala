@@ -22,6 +22,8 @@ trait PackageDeclaration extends Node
 
 case class TypeDeclaration(typeIdn: IdnDef) extends PackageDeclaration
 
+case class FunctionDeclaration(funcIdn: IdnDef, returnType: IdnUse, paramTypes: Seq[IdnUse]) extends PackageDeclaration
+
 trait Collection extends Node
 
 case class FieldDeclaration(idn: IdnDef, typ: IdnUse) extends Node

@@ -9,7 +9,10 @@ class AnalyserTest extends FunSuite {
 
   val systemPackage = makePackage("system.bloom",
     makeType("Int"),
-    makeType("String"))
+    makeType("String"),
+    makeType("Boolean"),
+    makeFunction("and", "Boolean", "Boolean", "Boolean"),
+    makeFunction("add", "Int", "Int", "Int"))
 
   val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
   val table2 = makeTable("table2", "id" -> "Int", "value" -> "Int")
@@ -203,6 +206,52 @@ class AnalyserTest extends FunSuite {
       )).errorLabels shouldBe Seq("Expected type 'Int' found 'String'.", "Expected type 'String' found 'Int'.")
   }
 
+  test("report function definition usage of unknown type on signature") {
+    analyzeProgram(makePackage(
+      "myFunctions",
+      makeFunction("foo", "Bar", "F1", "F2")
+    ))().
+      errorLabels shouldBe Seq("Symbol 'Bar' not defined.", "Symbol 'F1' not defined.", "Symbol 'F2' not defined.")
+  }
+
+  test("report function definition usage of non types on signature") {
+    analyzeProgram(makePackage(
+      "myFunctions",
+      makeType("Bar"),
+      makeFunction("id", "Bar", "Bar"),
+      makeFunction("f2", "Bar", "Bar"),
+      makeFunction("foo", "id", "Bar", "f2")
+    ))().
+      errorLabels shouldBe Seq(
+      "Expected reference to type, found function 'id'.",
+      "Expected reference to type, found function 'f2'.")
+  }
+
+  test("report function definition multiple times") {
+    analyzeProgram(makePackage(
+      "myFunctions",
+      makeType("Bar"),
+      makeFunction("id", "Bar", "Bar"),
+      makeFunction("id", "Bar", "Bar")))().
+      errorLabels shouldBe Seq("Symbol 'id' was defined multiple times.")
+  }
+
+  test("report using function on collection position") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseFunctionInCollectionSlot",
+        makeRule("and", Seq(), Seq())
+      )).errorLabels shouldBe Seq("Expected reference to collection, found function 'and'.")
+  }
+
+  test("report using function in type position") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseFunctionInCollectionSlot",
+        makeTable("table", "id" -> "add")
+      )).errorLabels shouldBe Seq("Expected reference to type, found function 'add'.")
+  }
+
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
   }
@@ -231,6 +280,9 @@ class AnalyserTest extends FunSuite {
     aliases.map(p => Alias(CollectionRef(IdnUse(p._1)), IdnDef(p._2)))
 
   private def makeType(name: String) = TypeDeclaration(IdnDef(name))
+
+  private def makeFunction(name: String, returnType: String, paramTypes: String*) =
+    FunctionDeclaration(IdnDef(name), IdnUse(returnType), paramTypes.map(IdnUse))
 
   private def makePackage(packageName: String, declarations: PackageDeclaration*) = Package(packageName, declarations)
 

@@ -31,6 +31,10 @@ object SymbolTable extends Environments {
     def description = s"field '${definedAt.idn.idn}'"
   }
 
+  case class FunctionEntity(definedAt: FunctionDeclaration) extends BloomEntity {
+    def description = s"function '${definedAt.funcIdn.idn}'"
+  }
+
 }
 
 class Analyzer(tree: ProgramTree) extends Attribution {
@@ -69,6 +73,14 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case TypeEntity(_) => noMessages
           case entity => message(id, s"Expected reference to type, found ${describeEntity(entity)}.")
         }
+      case FunctionDeclaration(_, ret, params) =>
+        checkuse(entityWithName(ret)) {
+          case TypeEntity(_) => noMessages
+          case entity => message(ret, s"Expected reference to type, found ${describeEntity(entity)}.")
+        } ++ params.flatMap(param => checkuse(entityWithName(param)){
+          case TypeEntity(_) => noMessages
+          case entity => message(ret, s"Expected reference to type, found ${describeEntity(entity)}.")
+        })
       case FieldAccessor(id: IdnUse, fid: IdnUse) =>
         checkuse(entityWithName(id)) {
           case AliasEntity(_) => noMessages
@@ -229,6 +241,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     attr {
       case tree.parent(p) =>
         p match {
+          case decl: FunctionDeclaration => FunctionEntity(decl)
           case decl: TypeDeclaration => TypeEntity(decl)
           case decl: Table => CollectionEntity(decl)
           case decl: Alias => AliasEntity(decl)
