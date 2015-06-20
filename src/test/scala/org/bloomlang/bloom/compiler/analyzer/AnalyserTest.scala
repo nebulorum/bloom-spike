@@ -263,7 +263,7 @@ class AnalyserTest extends FunSuite {
     Module(moduleName, stmts)
 
   private def makeTable(tableName: String, fields: (String, String)*): Table = {
-    Table(IdnDef(tableName), FieldDeclarations(fields.map(p => FieldDeclaration(IdnDef(p._1), IdnUse(p._2)))))
+    Table(IdnDef(tableName), FieldDeclarations(fields.map(p => FieldDeclaration(IdnDef(p._1), TypeRef(IdnUse(p._2))))))
   }
 
   private def makeRule(lhs: String, product: Seq[Alias], producer: Seq[FieldAccessor]) =
@@ -282,7 +282,7 @@ class AnalyserTest extends FunSuite {
   private def makeType(name: String) = TypeDeclaration(IdnDef(name))
 
   private def makeFunction(name: String, returnType: String, paramTypes: String*) =
-    FunctionDeclaration(IdnDef(name), IdnUse(returnType), paramTypes.map(IdnUse))
+    FunctionDeclaration(IdnDef(name), TypeRef(IdnUse(returnType)), paramTypes.map(x => TypeRef(IdnUse(x))))
 
   private def makePackage(packageName: String, declarations: PackageDeclaration*) = Package(packageName, declarations)
 

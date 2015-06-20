@@ -22,17 +22,19 @@ trait PackageDeclaration extends Node
 
 case class TypeDeclaration(typeIdn: IdnDef) extends PackageDeclaration
 
-case class FunctionDeclaration(funcIdn: IdnDef, returnType: IdnUse, paramTypes: Seq[IdnUse]) extends PackageDeclaration
+case class FunctionDeclaration(funcIdn: IdnDef, returnType: TypeRef, paramTypes: Seq[TypeRef]) extends PackageDeclaration
 
 trait Collection extends Node
 
-case class FieldDeclaration(idn: IdnDef, typ: IdnUse) extends Node
+case class FieldDeclaration(idn: IdnDef, typ: TypeRef) extends Node
 
 case class FieldDeclarations(fields: Seq[FieldDeclaration]) extends Node
 
 case class Table(tableIdn: IdnDef, declaration: FieldDeclarations) extends Collection
 
 case class CollectionRef(idn: IdnUse) extends Node
+
+case class TypeRef(idn: IdnUse) extends Node
 
 case class Alias(collection: CollectionRef, alias:IdnDef) extends Node
 

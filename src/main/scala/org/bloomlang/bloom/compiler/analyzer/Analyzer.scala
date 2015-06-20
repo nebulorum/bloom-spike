@@ -68,19 +68,11 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case CollectionEntity(_) => noMessages
           case entity => message(idn, s"Expected reference to collection, found ${describeEntity(entity)}.")
         }
-      case FieldDeclaration(_, id: IdnUse) =>
+      case TypeRef(id: IdnUse) =>
         checkuse(entityWithName(id)) {
           case TypeEntity(_) => noMessages
           case entity => message(id, s"Expected reference to type, found ${describeEntity(entity)}.")
         }
-      case FunctionDeclaration(_, ret, params) =>
-        checkuse(entityWithName(ret)) {
-          case TypeEntity(_) => noMessages
-          case entity => message(ret, s"Expected reference to type, found ${describeEntity(entity)}.")
-        } ++ params.flatMap(param => checkuse(entityWithName(param)){
-          case TypeEntity(_) => noMessages
-          case entity => message(ret, s"Expected reference to type, found ${describeEntity(entity)}.")
-        })
       case FieldAccessor(id: IdnUse, fid: IdnUse) =>
         checkuse(entityWithName(id)) {
           case AliasEntity(_) => noMessages
@@ -112,7 +104,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
   }
 
   private def checkFieldAccessorType(decl: FieldDeclaration, accessor: FieldAccessor): Messages = {
-    val dentType = entityType(entityWithName(decl.typ))
+    val dentType = entityType(entityWithName(decl.typ.idn))
     val assessorType = entityTypeIfField(entityWithName(accessor.field))
     if (dentType.isDefined && assessorType.isDefined && assessorType != dentType)
       message(accessor, s"Expected type '${dentType.get.typeIdn.idn}' found '${assessorType.get.typeIdn.idn}'.")
@@ -128,7 +120,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
 
   private def entityType(entity: Entity): Option[TypeDeclaration] =
     entity match {
-      case FieldEntity(FieldDeclaration(_, typ)) => entityType(entityWithName(typ))
+      case FieldEntity(FieldDeclaration(_, TypeRef(typ))) => entityType(entityWithName(typ))
       case TypeEntity(typ) => Some(typ)
       case _ => None
     }
@@ -165,9 +157,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     }
   }
 
-  def moduleDefinition(name: String): Option[Module] = {
-    definedModules.find(m => m.name == name)
-  }
+  def moduleDefinition(name: String): Option[Module] = definedModules.find(m => m.name == name)
 
   private def packageDefinition(name: String): Option[Package] = definedPackages.find(p => p.name == name)
 
