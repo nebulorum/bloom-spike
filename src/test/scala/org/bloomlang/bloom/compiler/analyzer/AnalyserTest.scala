@@ -196,7 +196,7 @@ class AnalyserTest extends FunSuite {
       makeModule("UseOtherSymbolOnAliasPosition",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key"))
-      )).errorLabels shouldBe Seq("Incorrect arity in rule, expected 2 found 1")
+      )).errorLabels shouldBe Seq("Incorrect arity, expected 2 found 1")
   }
 
   test("report incorrect type on RHS tuple producer") {
@@ -269,7 +269,7 @@ class AnalyserTest extends FunSuite {
       makeModule("UseFunction",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer(f("add")("a.key"), "a.value"))
-    )).errorLabels shouldBe Seq("Incorrect arity in function call, expected 2 found 1")
+    )).errorLabels shouldBe Seq("Incorrect arity, expected 2 found 1")
   }
 
   test("report incorrect function return type") {

@@ -84,58 +84,50 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case Rule(collection, producer) =>
         entityWithName(collection.idn) match {
           case CollectionEntity(t: Table) =>
-            val fieldDecl = t.declaration.fields
-            val tupleGens = producer.tupleExpressions
-            checkTupleArity(collection.idn, fieldDecl, tupleGens) ++ checkTypes(fieldDecl, tupleGens)
+            val fieldTypes = t.declaration.fields.map(_.typ)
+            val expressions = producer.tupleExpressions
+              checkTupleTypes(collection.idn, fieldTypes, expressions)
           case _ =>
             noMessages
         }
     }
 
-  private def checkTupleArity(collection: Node, fields: Seq[FieldDeclaration], gen: Seq[Expression]): Messages =
-    message(collection, s"Incorrect arity in rule, expected ${fields.size} found ${gen.size}",
-      fields.size != gen.size)
-
-  private def checkTypes(fieldDecls: Seq[FieldDeclaration], tupleGens: Seq[Expression]): Messages = {
-    val msgs: Seq[Messages] = for {
-      (decl, gen) <- fieldDecls zip tupleGens
-    } yield checkFieldAccessorType(decl, gen)
-    msgs.flatten.toVector
+  private def checkTupleTypes(idn: IdnUse, expectedTypes: Seq[TypeRef], expressions: Seq[Expression]): Messages = {
+    val messages: Seq[Messages] = for {
+      (expType, expression) <- expectedTypes zip expressions
+    } yield checkExpressionType(entityType(entityWithName(expType.idn)), expression)
+    messages.flatten.toVector ++ checkTupleArity(idn, expectedTypes, expressions)
   }
 
-  private def checkFieldAccessorType(decl: FieldDeclaration, accessor: Expression): Messages = {
-    val dentType = entityType(entityWithName(decl.typ.idn))
-    accessor match {
-      case accessor1: FieldAccessor =>
-        val assessorType = entityTypeIfField(entityWithName(accessor1.field))
-        if (dentType.isDefined && assessorType.isDefined && assessorType != dentType)
-          message(accessor, s"Expected type '${dentType.get.typeIdn.idn}' found '${assessorType.get.typeIdn.idn}'.")
-        else
-          noMessages
+  private def checkTupleArity(use: IdnUse, fields: Seq[TypeRef], gen: Seq[Expression]): Messages =
+    message(use, s"Incorrect arity, expected ${fields.size} found ${gen.size}",
+      fields.size != gen.size)
+
+  private def checkExpressionType(expectedType: Option[TypeDeclaration], expression: Expression): Messages = {
+    expression match {
+      case accessor: FieldAccessor =>
+        val assessorType = entityTypeIfField(entityWithName(accessor.field))
+        checkIfTypeMatches(expression, expectedType, assessorType)
 
       case fCall: FunctionCall =>
-        val fType = functionReturnTypeIfField(entityWithName(fCall.function))
-        val returnMsg = if(dentType.isDefined && fType.isDefined && fType != dentType)
-          message(fCall, s"Expected type '${dentType.get.typeIdn.idn}' found '${fType.get.typeIdn.idn}'.")
-        else
-          noMessages
-
-        val funcDef = entityWithName(fCall.function)
-        val fakeFieldDecls:Seq[FieldDeclaration] = funcDef match {
+        val fType = functionReturnTypeIfFunction(entityWithName(fCall.function))
+        val returnMsg = checkIfTypeMatches(fCall, expectedType, fType)
+        val argumentMessages: Messages = entityWithName(fCall.function) match {
           case FunctionEntity(fd) =>
-              fd.paramTypes.map(x => FieldDeclaration(null, x))
-          case _ => Seq()
+            checkTupleTypes(fCall.function, fd.paramTypes, fCall.arguments)
+          case _ => noMessages
         }
-        val argumentsMessages = checkTypes(fakeFieldDecls, fCall.arguments)
-
-        returnMsg ++ argumentsMessages ++ message(fCall,
-          s"Incorrect arity in function call, expected ${fakeFieldDecls.length} found ${fCall.arguments.length}",
-          funcDef != UnknownEntity()  && fCall.arguments.length != fakeFieldDecls.length
-        )
+        returnMsg ++ argumentMessages
       case _ =>
         noMessages
     }
   }
+
+  private def checkIfTypeMatches(node: Node, expectType: Option[TypeDeclaration], effectiveType: Option[TypeDeclaration]) =
+    if (expectType.isDefined && effectiveType.isDefined && expectType != effectiveType)
+      message(node, s"Expected type '${expectType.get.typeIdn.idn}' found '${effectiveType.get.typeIdn.idn}'.")
+    else
+      noMessages
 
   private def entityTypeIfField(entity: Entity): Option[TypeDeclaration] =
     entity match {
@@ -143,7 +135,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case _ => None
     }
 
-  private def functionReturnTypeIfField(entity: Entity): Option[TypeDeclaration] =
+  private def functionReturnTypeIfFunction(entity: Entity): Option[TypeDeclaration] =
     entity match {
       case fe@FunctionEntity(fd) =>
         entityType(entityWithName(fd.returnType.idn))
