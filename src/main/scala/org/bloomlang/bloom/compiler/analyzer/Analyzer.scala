@@ -92,29 +92,61 @@ class Analyzer(tree: ProgramTree) extends Attribution {
         }
     }
 
-  private def checkTupleArity(collection: Node, fields: Seq[FieldDeclaration], gen: Seq[FieldAccessor]): Messages =
+  private def checkTupleArity(collection: Node, fields: Seq[FieldDeclaration], gen: Seq[Expression]): Messages =
     message(collection, s"Incorrect arity in rule, expected ${fields.size} found ${gen.size}",
       fields.size != gen.size)
 
-  private def checkTypes(fieldDecls: Seq[FieldDeclaration], tupleGens: Seq[FieldAccessor]): Messages = {
+  private def checkTypes(fieldDecls: Seq[FieldDeclaration], tupleGens: Seq[Expression]): Messages = {
     val msgs: Seq[Messages] = for {
       (decl, gen) <- fieldDecls zip tupleGens
     } yield checkFieldAccessorType(decl, gen)
     msgs.flatten.toVector
   }
 
-  private def checkFieldAccessorType(decl: FieldDeclaration, accessor: FieldAccessor): Messages = {
+  private def checkFieldAccessorType(decl: FieldDeclaration, accessor: Expression): Messages = {
     val dentType = entityType(entityWithName(decl.typ.idn))
-    val assessorType = entityTypeIfField(entityWithName(accessor.field))
-    if (dentType.isDefined && assessorType.isDefined && assessorType != dentType)
-      message(accessor, s"Expected type '${dentType.get.typeIdn.idn}' found '${assessorType.get.typeIdn.idn}'.")
-    else
-      noMessages
+    accessor match {
+      case accessor1: FieldAccessor =>
+        val assessorType = entityTypeIfField(entityWithName(accessor1.field))
+        if (dentType.isDefined && assessorType.isDefined && assessorType != dentType)
+          message(accessor, s"Expected type '${dentType.get.typeIdn.idn}' found '${assessorType.get.typeIdn.idn}'.")
+        else
+          noMessages
+
+      case fCall: FunctionCall =>
+        val fType = functionReturnTypeIfField(entityWithName(fCall.function))
+        val returnMsg = if(dentType.isDefined && fType.isDefined && fType != dentType)
+          message(fCall, s"Expected type '${dentType.get.typeIdn.idn}' found '${fType.get.typeIdn.idn}'.")
+        else
+          noMessages
+
+        val funcDef = entityWithName(fCall.function)
+        val fakeFieldDecls:Seq[FieldDeclaration] = funcDef match {
+          case FunctionEntity(fd) =>
+              fd.paramTypes.map(x => FieldDeclaration(null, x))
+          case _ => Seq()
+        }
+        val argumentsMessages = checkTypes(fakeFieldDecls, fCall.arguments)
+
+        returnMsg ++ argumentsMessages ++ message(fCall,
+          s"Incorrect arity in function call, expected ${fakeFieldDecls.length} found ${fCall.arguments.length}",
+          funcDef != UnknownEntity()  && fCall.arguments.length != fakeFieldDecls.length
+        )
+      case _ =>
+        noMessages
+    }
   }
 
   private def entityTypeIfField(entity: Entity): Option[TypeDeclaration] =
     entity match {
       case fe@FieldEntity(fd) => entityType(fe)
+      case _ => None
+    }
+
+  private def functionReturnTypeIfField(entity: Entity): Option[TypeDeclaration] =
+    entity match {
+      case fe@FunctionEntity(fd) =>
+        entityType(entityWithName(fd.returnType.idn))
       case _ => None
     }
 

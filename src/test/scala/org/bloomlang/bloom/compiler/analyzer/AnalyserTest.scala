@@ -4,6 +4,7 @@ import org.bloomlang.bloom.compiler.ast._
 import org.scalatest._
 import Matchers._
 import org.kiama.util.Messaging._
+import scala.language.implicitConversions
 
 class AnalyserTest extends FunSuite {
 
@@ -12,6 +13,7 @@ class AnalyserTest extends FunSuite {
     makeType("String"),
     makeType("Boolean"),
     makeFunction("and", "Boolean", "Boolean", "Boolean"),
+    makeFunction("equal", "Boolean", "Int", "Int"),
     makeFunction("add", "Int", "Int", "Int"))
 
   val table1 = makeTable("table1", "key" -> "Int", "value" -> "String")
@@ -252,9 +254,56 @@ class AnalyserTest extends FunSuite {
       )).errorLabels shouldBe Seq("Expected reference to type, found function 'add'.")
   }
 
+  test("report non existing function call") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseFunction",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", f("neg")("a.value")))
+    )).errorLabels shouldBe Seq("Symbol 'neg' not defined.")
+  }
+
+  test("report incorrect function argument arity") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseFunction",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer(f("add")("a.key"), "a.value"))
+    )).errorLabels shouldBe Seq("Incorrect arity in function call, expected 2 found 1")
+  }
+
+  test("report incorrect function return type") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseFunction",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", f("add")("a.key", "a.key")))
+    )).errorLabels shouldBe Seq("Expected type 'String' found 'Int'.")
+  }
+
+  test("report incorrect function argument types") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseFunction",
+        table1,
+        makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer(f("add")("a.value", "a.value"), "a.value"))
+    )).errorLabels shouldBe Seq("Expected type 'Int' found 'String'.", "Expected type 'Int' found 'String'.")
+  }
+
+  test("program with correct function call should report no error") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseFunction",
+        table2,
+        makeRule("table2", makeProduct("table2" -> "a", "table2" -> "b"), makeTupleProducer("a.id", f("add")("b.value", "a.value")))
+    )).errorLabels shouldBe Seq()
+  }
+
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
   }
+
+  private def f(function: String)(args: Expression*) = FunctionCall(IdnUse(function), args)
 
   private def analyzeProgram(pkgs: Package*)(stmts: Node*) =
     new TestAnalyzer(Program(pkgs, Seq(ModuleContainer(stmts))))
@@ -266,13 +315,15 @@ class AnalyserTest extends FunSuite {
     Table(IdnDef(tableName), FieldDeclarations(fields.map(p => FieldDeclaration(IdnDef(p._1), TypeRef(IdnUse(p._2))))))
   }
 
-  private def makeRule(lhs: String, product: Seq[Alias], producer: Seq[FieldAccessor]) =
+  private def makeRule(lhs: String, product: Seq[Alias], producer: Seq[Expression]) =
     Rule(CollectionRef(IdnUse(lhs)), CollectionProduct(product, producer))
 
-  private def makeTupleProducer(values: String*): Seq[FieldAccessor] = values.map(v => {
-    val parts = v.split("\\.")
+  private def makeTupleProducer(values: Expression*): Seq[Expression] = values
+
+  implicit def string2FieldAccessor(value: String): FieldAccessor = {
+    val parts = value.split("\\.")
     fieldAccess(parts(0), parts(1))
-  })
+  }
 
   private def fieldAccess(alias: String, field: String) = FieldAccessor(IdnUse(alias), IdnUse(field))
 
