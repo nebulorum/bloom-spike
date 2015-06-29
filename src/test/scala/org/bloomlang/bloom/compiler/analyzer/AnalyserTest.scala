@@ -23,11 +23,12 @@ class AnalyserTest extends FunSuite {
   val nullTable2 = makeTable("table2")
 
   val rule1 = makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", "a.value"))
+  val rule2 = makeRule("table2", makeProduct("table1" -> "a", "table2" -> "b"),
+    makeTupleProducer("a.key", f("add")("a.key", "b.value")))
 
   val module1 = makeModule("SomeModule",
     ImportModule("OtherModule"),
-    table1,
-    rule1)
+    table1, rule1, rule2)
 
   val otherModule = makeModule("OtherModule", table2)
 
@@ -56,7 +57,8 @@ class AnalyserTest extends FunSuite {
   }
 
   test("report missing module on import") {
-    analyzeProgram(systemPackage)(importSystemBloom, module1).
+    analyzeProgram(systemPackage)(importSystemBloom,
+      makeModule("ImportMissingModule", ImportModule("OtherModule"))).
       errorLabels shouldBe Seq("Module 'OtherModule' not defined.")
   }
 
@@ -257,7 +259,7 @@ class AnalyserTest extends FunSuite {
   test("report non existing function call") {
     analyzeProgram(systemPackage)(
       importSystemBloom,
-      makeModule("UseFunction",
+      makeModule("UseFunctionNotDefined",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", f("neg")("a.value")))
     )).errorLabels shouldBe Seq("Symbol 'neg' not defined.")
@@ -266,7 +268,7 @@ class AnalyserTest extends FunSuite {
   test("report incorrect function argument arity") {
     analyzeProgram(systemPackage)(
       importSystemBloom,
-      makeModule("UseFunction",
+      makeModule("UseFunctionWrongArity",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer(f("add")("a.key"), "a.value"))
     )).errorLabels shouldBe Seq("Incorrect arity, expected 2 found 1")
@@ -275,7 +277,7 @@ class AnalyserTest extends FunSuite {
   test("report incorrect function return type") {
     analyzeProgram(systemPackage)(
       importSystemBloom,
-      makeModule("UseFunction",
+      makeModule("UseFunctionWrongType",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", f("add")("a.key", "a.key")))
     )).errorLabels shouldBe Seq("Expected type 'String' found 'Int'.")
@@ -284,7 +286,7 @@ class AnalyserTest extends FunSuite {
   test("report incorrect function argument types") {
     analyzeProgram(systemPackage)(
       importSystemBloom,
-      makeModule("UseFunction",
+      makeModule("UseFunctionWrongType",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer(f("add")("a.value", "a.value"), "a.value"))
     )).errorLabels shouldBe Seq("Expected type 'Int' found 'String'.", "Expected type 'Int' found 'String'.")
@@ -293,7 +295,7 @@ class AnalyserTest extends FunSuite {
   test("program with correct function call should report no error") {
     analyzeProgram(systemPackage)(
       importSystemBloom,
-      makeModule("UseFunction",
+      makeModule("UseFunctionCorrect",
         table2,
         makeRule("table2", makeProduct("table2" -> "a", "table2" -> "b"), makeTupleProducer("a.id", f("add")("b.value", "a.value")))
     )).errorLabels shouldBe Seq()
@@ -301,6 +303,7 @@ class AnalyserTest extends FunSuite {
 
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
+    new TestAnalyzer(program).dumpProgram()
   }
 
   private def f(function: String)(args: Expression*) = FunctionCall(IdnUse(function), args)
@@ -344,7 +347,14 @@ class AnalyserTest extends FunSuite {
   class TestAnalyzer(val program: Program) {
     val analyzer = new Analyzer(ProgramTree(program))
 
+//    dumpProgram()
+
     def errorLabels = analyzer.errors.map(_.label)
+
+    def dumpProgram():Unit = {
+      val pp = new ASTPrettyPrint
+      println(pp.format(program).layout)
+    }
   }
 
 }
