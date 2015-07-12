@@ -35,9 +35,15 @@ class ASTPrettyPrint extends PrettyPrinter {
 
       case FieldDeclaration(idn, typeRef) =>
         toDoc(idn) <+> ":" <+> toDoc(typeRef)
-      case CollectionProduct(products, expressions) =>
-        brackets(ssep(products.toList map toDoc, " * ")) <+> "=> project" <+>
-          brackets(ssep(expressions.toList map toDoc, ", "))
+      case CollectionProduct(products, optionalSelection, expressions) =>
+        if (optionalSelection.isDefined) {
+          brackets(ssep(products.toList map toDoc, " * ")) <+>
+            "having" <+> parens(toDoc(optionalSelection.get)) <+>
+            "=> project" <+> brackets(ssep(expressions.toList map toDoc, ", "))
+        } else {
+          brackets(ssep(products.toList map toDoc, " * ")) <+>
+            "=> project" <+> brackets(ssep(expressions.toList map toDoc, ", "))
+        }
       case Alias(cr, alias) =>
         cr.idn.idn <+> "->" <+> alias.idn
       case FieldAccessor(alias, field) =>

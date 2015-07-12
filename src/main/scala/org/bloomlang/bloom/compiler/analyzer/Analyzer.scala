@@ -81,12 +81,16 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case FieldEntity(_) => noMessages
           case entity => message(fid, s"Expected field, found ${describeEntity(entity)}.")
         }
+      case CollectionProduct(_, Some(expr), _) if findEntityAtNodeByName(expr, "Boolean") == UnknownEntity() =>
+        message(expr, "Type 'Boolean' not defined, this is required for selection")
+
       case Rule(collection, producer) =>
         entityWithName(collection.idn) match {
           case CollectionEntity(t: Table) =>
             val fieldTypes = t.declaration.fields.map(_.typ)
             val expressions = producer.tupleExpressions
-              checkTupleTypes(collection.idn, fieldTypes, expressions)
+            val ms :Option[Messages] =   producer.selection.map( sel => checkExpressionType(entityType(findEntityAtNodeByName(sel, "Boolean")), sel))
+            checkTupleTypes(collection.idn, fieldTypes, expressions) ++ ms.getOrElse(noMessages)
           case _ =>
             noMessages
         }
@@ -180,6 +184,8 @@ class Analyzer(tree: ProgramTree) extends Attribution {
         lookup(defCompoundEnv(node), node.idn, UnknownEntity())
     }
   }
+
+  private def findEntityAtNodeByName(node: Node, identifier: String): Entity  = lookup(defCompoundEnv(node), identifier, UnknownEntity())
 
   def moduleDefinition(name: String): Option[Module] = definedModules.find(m => m.name == name)
 

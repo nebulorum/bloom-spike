@@ -262,7 +262,7 @@ class AnalyserTest extends FunSuite {
       makeModule("UseFunctionNotDefined",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", f("neg")("a.value")))
-    )).errorLabels shouldBe Seq("Symbol 'neg' not defined.")
+      )).errorLabels shouldBe Seq("Symbol 'neg' not defined.")
   }
 
   test("report incorrect function argument arity") {
@@ -271,7 +271,7 @@ class AnalyserTest extends FunSuite {
       makeModule("UseFunctionWrongArity",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer(f("add")("a.key"), "a.value"))
-    )).errorLabels shouldBe Seq("Incorrect arity, expected 2 found 1")
+      )).errorLabels shouldBe Seq("Incorrect arity, expected 2 found 1")
   }
 
   test("report incorrect function return type") {
@@ -280,7 +280,7 @@ class AnalyserTest extends FunSuite {
       makeModule("UseFunctionWrongType",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", f("add")("a.key", "a.key")))
-    )).errorLabels shouldBe Seq("Expected type 'String' found 'Int'.")
+      )).errorLabels shouldBe Seq("Expected type 'String' found 'Int'.")
   }
 
   test("report incorrect function argument types") {
@@ -289,7 +289,37 @@ class AnalyserTest extends FunSuite {
       makeModule("UseFunctionWrongType",
         table1,
         makeRule("table1", makeProduct("table1" -> "a"), makeTupleProducer(f("add")("a.value", "a.value"), "a.value"))
-    )).errorLabels shouldBe Seq("Expected type 'Int' found 'String'.", "Expected type 'Int' found 'String'.")
+      )).errorLabels shouldBe Seq("Expected type 'Int' found 'String'.", "Expected type 'Int' found 'String'.")
+  }
+
+  test("report missing definition of Boolean if not in scope at the selection point") {
+    analyzeProgram(
+      makePackage("onlyInt", makeType("Integer")))(
+        ImportPackage("onlyInt"),
+        makeModule("LetsHaveSelectionButNoBoolean",
+          makeTable("natural", "n" -> "Integer"),
+          makeRule("natural", makeProduct("natural" -> "nat"), "nat.n", makeTupleProducer("nat.n")))
+      ).errorLabels shouldBe Seq("Type 'Boolean' not defined, this is required for selection")
+  }
+
+  test("report selection with incorrect result type") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("IncorrectSelectionType",
+        table2,
+        makeRule("table2", makeProduct("table2" -> "a", "table2" -> "b"),
+          f("add")("b.value", "a.value"), makeTupleProducer("a.id", f("add")("b.value", "a.value")))
+      )).errorLabels shouldBe Seq("Expected type 'Boolean' found 'Int'.")
+  }
+
+  test("report selection with unknown field and alias") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("IncorrectSelectionReferences",
+        table2,
+        makeRule("table2", makeProduct("table2" -> "a", "table2" -> "b"),
+          f("add")("c.value", "a.key"), makeTupleProducer("a.id", f("add")("b.value", "a.value")))
+      )).errorLabels should contain allOf("Symbol 'c' not defined.", "Symbol 'value' not defined.", "Symbol 'key' not defined.")
   }
 
   test("program with correct function call should report no error") {
@@ -297,8 +327,10 @@ class AnalyserTest extends FunSuite {
       importSystemBloom,
       makeModule("UseFunctionCorrect",
         table2,
-        makeRule("table2", makeProduct("table2" -> "a", "table2" -> "b"), makeTupleProducer("a.id", f("add")("b.value", "a.value")))
-    )).errorLabels shouldBe Seq()
+        makeRule("table2", makeProduct("table2" -> "a", "table2" -> "b"),
+          f("equal")("a.id", "b.id"),
+          makeTupleProducer("a.id", f("add")("b.value", "a.value")))
+      )).errorLabels shouldBe Seq()
   }
 
   test("good program should have no messages") {
@@ -318,8 +350,11 @@ class AnalyserTest extends FunSuite {
     Table(IdnDef(tableName), FieldDeclarations(fields.map(p => FieldDeclaration(IdnDef(p._1), TypeRef(IdnUse(p._2))))))
   }
 
-  private def makeRule(lhs: String, product: Seq[Alias], producer: Seq[Expression]) =
-    Rule(CollectionRef(IdnUse(lhs)), CollectionProduct(product, producer))
+  private def makeRule(lhs: String, product: Seq[Alias], producer: Seq[Expression]): Rule =
+    makeRule(lhs, product, null, producer)
+
+  private def makeRule(lhs: String, product: Seq[Alias], selection: Expression, producer: Seq[Expression]): Rule =
+    Rule(CollectionRef(IdnUse(lhs)), CollectionProduct(product, Option(selection), producer))
 
   private def makeTupleProducer(values: Expression*): Seq[Expression] = values
 
@@ -347,11 +382,11 @@ class AnalyserTest extends FunSuite {
   class TestAnalyzer(val program: Program) {
     val analyzer = new Analyzer(ProgramTree(program))
 
-//    dumpProgram()
+    //    dumpProgram()
 
     def errorLabels = analyzer.errors.map(_.label)
 
-    def dumpProgram():Unit = {
+    def dumpProgram(): Unit = {
       val pp = new ASTPrettyPrint
       println(pp.format(program).layout)
     }
