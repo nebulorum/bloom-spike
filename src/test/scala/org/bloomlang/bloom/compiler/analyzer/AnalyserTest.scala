@@ -210,6 +210,15 @@ class AnalyserTest extends FunSuite {
       )).errorLabels shouldBe Seq("Expected type 'Int' found 'String'.", "Expected type 'String' found 'Int'.")
   }
 
+  test("should break cycle in alias an field with same name") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("BreakCycleInAliasAndFieldName",
+        makeTable("natural", "n" -> "Int"),
+        makeRule("natural", makeProduct("natural" -> "n"), makeTupleProducer("n.n"))
+      )).errorLabels shouldBe Seq()
+  }
+
   test("report function definition usage of unknown type on signature") {
     analyzeProgram(makePackage(
       "myFunctions",
