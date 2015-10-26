@@ -24,7 +24,15 @@ object SymbolTable extends Environments {
   }
 
   case class AliasEntity(definedAt: Alias) extends BloomEntity {
-    def description = s"alias '${definedAt.alias.idn}' to collection '${definedAt.collection.idn.idn}"
+    //FIXME this is a hack
+    def bad(c: NamespaceCollection): String = {
+      c match {
+        case NamespaceDeref(alias, next) => alias.idn + bad(next)
+        case CollectionRef(col) => col.idn
+      }
+    }
+
+    def description = s"alias '${definedAt.alias.idn}' to collection '${bad(definedAt.collection)}"
   }
 
   case class FieldEntity(definedAt: FieldDeclaration) extends BloomEntity {
@@ -33,6 +41,10 @@ object SymbolTable extends Environments {
 
   case class FunctionEntity(definedAt: FunctionDeclaration) extends BloomEntity {
     def description = s"function '${definedAt.funcIdn.idn}'"
+  }
+
+  case class ModuleImportEntity(definedAt: ImportModuleWithAlias) extends BloomEntity {
+    def description = s"module import '${definedAt.importedModule}' with alias '${definedAt.idn}'"
   }
 
 }
@@ -84,13 +96,20 @@ class Analyzer(tree: ProgramTree) extends Attribution {
       case CollectionProduct(_, Some(expr), _) if findEntityAtNodeByName(expr, "Boolean") == UnknownEntity() =>
         message(expr, "Type 'Boolean' not defined, this is required for selection")
 
-      case Rule(collection, producer) =>
-        entityWithName(collection.idn) match {
+      case NamespaceDeref(idn, _) =>
+        checkuse(entityWithName(idn)) {
+          case ModuleImportEntity(_) => noMessages
+          case entity => message(idn, s"Expected module alias, found ${describeEntity(entity)}")
+        }
+
+      case Rule(namespacedCollection: NamespaceCollection, producer) =>
+        val collection = findCollectionReferenceInAliasNamedspace(namespacedCollection)
+        entityWithName(collection) match {
           case CollectionEntity(t: Table) =>
             val fieldTypes = t.declaration.fields.map(_.typ)
             val expressions = producer.tupleExpressions
             val ms: Option[Messages] = producer.selection.map(sel => checkExpressionType(entityType(findEntityAtNodeByName(sel, "Boolean")), sel))
-            checkTupleTypes(collection.idn, fieldTypes, expressions) ++ ms.getOrElse(noMessages)
+            checkTupleTypes(collection, fieldTypes, expressions) ++ ms.getOrElse(noMessages)
           case _ =>
             noMessages
         }
@@ -164,8 +183,8 @@ class Analyzer(tree: ProgramTree) extends Attribution {
 
   private def findField(entity: Entity, fieldIdn: IdnUse): Entity = {
     entity match {
-      case AliasEntity(alias@Alias(CollectionRef(cid: IdnUse), _)) =>
-        entityWithName(cid) match {
+      case AliasEntity(alias@Alias(colRef: NamespaceCollection, _)) =>
+        entityWithName(findCollectionReferenceInAliasNamedspace(colRef)) match {
           case CollectionEntity(table: Table) =>
             lookup(finalEnvAt(table.declaration), fieldIdn.idn, UnknownEntity())
           case _ => UnknownEntity()
@@ -174,14 +193,48 @@ class Analyzer(tree: ProgramTree) extends Attribution {
     }
   }
 
+  private def findCollectionReferenceInAliasNamedspace(cf: NamespaceCollection):IdnUse =
+    cf match {
+      case NamespaceDeref(_, next) => findCollectionReferenceInAliasNamedspace(next)
+      case CollectionRef(idn) => idn
+    }
+
   private lazy val entityWithName: Identifier => Entity = {
     attr {
       // Follow field to collection declaration f == f1 ensure we only check the field usage point
       case tree.parent.pair(f1, FieldAccessor(alias, f)) if f eq f1 =>
         findField(entityWithName(alias), f)
+      case tree.parent.pair(id, CollectionRef(idn)) if id eq idn =>
+        lookup(findEnvironmentWithNamespace(idn), idn.idn, UnknownEntity())
       case node =>
         // Cant use finalEnvAt(node) because this will cause two messages to popup on at each location.
         lookup(defCompoundEnv(node), node.idn, UnknownEntity())
+    }
+  }
+
+  private lazy val findEnvironmentWithNamespace: Node => Environment = {
+    attr {
+      case tree.parent(p:Node) =>
+        p match {
+          case CollectionRef(r) =>
+            findEnvironmentWithNamespace(p)
+          case node: Alias =>
+            defCompoundEnv(node.collection)
+          case NamespaceDeref(r, _) =>
+            val ent = entityWithName(r)
+            ent match {
+              case ModuleImportEntity(ImportModuleWithAlias(mod, alias)) =>
+                moduleDefinition(mod) match {
+                  case Some(m) =>
+                    finalEnvAt(m)
+                  case None =>
+                    rootenv()
+                }
+              case _ => rootenv()
+            }
+          case node =>
+              defCompoundEnv(node)
+        }
     }
   }
 
@@ -266,6 +319,7 @@ class Analyzer(tree: ProgramTree) extends Attribution {
           case decl: Table => CollectionEntity(decl)
           case decl: Alias => AliasEntity(decl)
           case decl: FieldDeclaration => FieldEntity(decl)
+          case decl: ImportModuleWithAlias => ModuleImportEntity(decl)
         }
     }
 

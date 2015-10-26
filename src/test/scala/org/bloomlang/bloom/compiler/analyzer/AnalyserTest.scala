@@ -62,6 +62,26 @@ class AnalyserTest extends FunSuite {
       errorLabels shouldBe Seq("Module 'OtherModule' not defined.")
   }
 
+  test("report using other type in module alias position") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      makeModule("UseNonAlias",
+        table1,
+        makeRule("table1.table2", makeProduct("table1" -> "a"), makeTupleProducer("a.key", "a.value"))
+      )).errorLabels shouldBe Seq("Expected module alias, found table 'table1'", "Symbol 'table2' not defined.")
+  }
+
+  test("report not finding a table in a module if there is same name on the current module") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      otherModule,
+      makeModule("ModuleWithRef",
+        ImportModuleWithAlias("OtherModule", IdnDef("m")),
+        makeTable("table1", "key" -> "Int"),
+        makeRule("m.table1", makeProduct("table1" -> "a"), makeTupleProducer("a.key", "a.key"))
+      )).errorLabels shouldBe Seq("Symbol 'table1' not defined.")
+  }
+
   test("report missing package import") {
     analyzeProgram()(importSystemBloom).
       errorLabels shouldBe Seq("Package 'system.bloom' not found.")
@@ -342,6 +362,16 @@ class AnalyserTest extends FunSuite {
       )).errorLabels shouldBe Seq()
   }
 
+  test("program with correct aliased module import should not report error") {
+    analyzeProgram(systemPackage)(
+      importSystemBloom,
+      otherModule,
+      makeModule("ModuleThatImportsWithAlias",
+        ImportModuleWithAlias("OtherModule", IdnDef("b")),
+        makeRule("b.table2", makeProduct("b.table2" -> "a"), makeTupleProducer("a.id", "a.value"))
+      )).errorLabels shouldBe Seq()
+  }
+
   test("good program should have no messages") {
     analyzer.errors shouldBe noMessages
     new TestAnalyzer(program).dumpProgram()
@@ -363,7 +393,7 @@ class AnalyserTest extends FunSuite {
     makeRule(lhs, product, null, producer)
 
   private def makeRule(lhs: String, product: Seq[Alias], selection: Expression, producer: Seq[Expression]): Rule =
-    Rule(CollectionRef(IdnUse(lhs)), CollectionProduct(product, Option(selection), producer))
+    Rule(stringToNamespaceCollection(lhs), CollectionProduct(product, Option(selection), producer))
 
   private def makeTupleProducer(values: Expression*): Seq[Expression] = values
 
@@ -375,7 +405,12 @@ class AnalyserTest extends FunSuite {
   private def fieldAccess(alias: String, field: String) = FieldAccessor(IdnUse(alias), IdnUse(field))
 
   private def makeProduct(aliases: (String, String)*) =
-    aliases.map(p => Alias(CollectionRef(IdnUse(p._1)), IdnDef(p._2)))
+    aliases.map(p => Alias(stringToNamespaceCollection(p._1), IdnDef(p._2)))
+
+  private def stringToNamespaceCollection(s: String): NamespaceCollection = {
+    val parts = s.split("\\.").reverse
+    parts.tail.foldLeft[NamespaceCollection](CollectionRef(IdnUse(parts.head)))((a,c) => NamespaceDeref(IdnUse(c), a))
+  }
 
   private def makeType(name: String) = TypeDeclaration(IdnDef(name))
 

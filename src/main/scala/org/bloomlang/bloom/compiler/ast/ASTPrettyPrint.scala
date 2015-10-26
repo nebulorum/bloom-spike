@@ -24,12 +24,13 @@ class ASTPrettyPrint extends PrettyPrinter {
       case TypeDeclaration(idn) => "type" <+> toDoc(idn)
 
       case ImportPackage(ip) => "import" <+> ip
+      case ImportModuleWithAlias(im, alias) => "import" <+> im <+> "->" <+> toDoc(alias)
       case ImportModule(im) => "import" <+> im
 
       case Module(name, statements) =>
         "module" <+> name <> line <> braces(nest(line <> vsep(statements.toList map toDoc)) <> line) <> line
       case Rule(lhs, rhs) =>
-        lhs.idn.idn <+> "<==" <+> toDoc(rhs)
+        toDoc(lhs) <+> "<==" <+> toDoc(rhs)
       case Table(idn, fields) =>
         "table" <+> idn.idn <+> brackets(ssep(fields.fields.toList map toDoc, ", "))
 
@@ -45,7 +46,12 @@ class ASTPrettyPrint extends PrettyPrinter {
             "=> project" <+> brackets(ssep(expressions.toList map toDoc, ", "))
         }
       case Alias(cr, alias) =>
-        cr.idn.idn <+> "->" <+> alias.idn
+        toDoc(cr) <+> "->" <+> alias.idn
+
+      case CollectionRef(idn) => toDoc(idn)
+
+      case NamespaceDeref(alias, next) => toDoc(alias) <> "." <> toDoc(next)
+
       case FieldAccessor(alias, field) =>
         toDoc(alias) <> "." <> toDoc(field)
       case FunctionCall(fname, args) =>
